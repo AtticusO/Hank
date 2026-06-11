@@ -5,7 +5,7 @@ import cv2
 
 class Hank:
     def __init__(self):
-        self.cam_init = cam_ops.Cam(1)
+        self.cam_init = cam_ops.Cam(0)
         self.model = obj_detection.detect()
     
     def detect(self, frame):
@@ -24,6 +24,8 @@ class Hank:
         cv2.destroyAllWindows()
     def show(self, frame):
         cv2.imshow("View", frame)
+
+    
 
 
 if __name__ == "__main__":
