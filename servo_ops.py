@@ -67,6 +67,13 @@ async def main():
         
         ##Jabs and Double Jabs
         elif d == "jab" or d == "j":
+            if m.angles["shoulder"] != 70 and m.angles["elbow"] != 50:
+                await asyncio.gather(
+                    m.move_shoulder(70),
+                    m.move_elbow(50)
+                )
+                time.sleep(0.05)
+
             await asyncio.gather(
                 m.move_shoulder(-50),
                 m.move_elbow(-90)
@@ -77,6 +84,12 @@ async def main():
                 m.move_elbow(50)
             )
         elif d == "jj":
+            if m.angles["shoulder"] != 70 and m.angles["elbow"] != 50:
+                await asyncio.gather(
+                    m.move_shoulder(70),
+                    m.move_elbow(50)
+                )
+                time.sleep(0.05)
             await asyncio.gather(
                 m.move_shoulder(-50),
                 m.move_elbow(-90)
