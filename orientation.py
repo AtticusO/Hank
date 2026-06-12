@@ -15,7 +15,6 @@ class positions:
     async def move_servo(self, servo_pos, delays):
         for i in range(len(servo_pos)):
             print(servo_pos[i])
-            print(f"{servo_pos[i][0]}, {servo_pos[i][1]}, {servo_pos[i][2]}")
 
             await asyncio.gather(
                 self.servos.move_waist(servo_pos[i][0]),
@@ -141,8 +140,11 @@ class positions:
 
 if __name__ == "__main__":
     p = positions()
+    print("\n $$$   Hank Orientation System   $$$ \n")
     while True:
+        print("\n")
         x = input("Enter Orientation >>> ")
+        print("\n")
         if x == "curl" or x == "cu":
             p.curl()
         elif x == "fb" or x == "b":
