@@ -9,18 +9,18 @@ class move:
         self.factory = PiGPIOFactory()
         
         ## Waist init
-        #self.waist = AngularServo(12, min_angle=-90, max_angle=90, pin_factory=self.factory)
-        #self.waist.angle = 0
+        self.waist = AngularServo(27, min_angle=-90, max_angle=90, pin_factory=self.factory)
+        self.waist.angle = 0
         print("Waist Angle | 0")
         
         ## Shoulder init
-        #self.shoulder = AngularServo(17, min_angle=-90, max_angle=90, pin_factory=self.factory)
-        #self.shoulder.angle = 70
+        self.shoulder = AngularServo(17, min_angle=-90, max_angle=90, pin_factory=self.factory)
+        self.shoulder.angle = 70
         print(f"Shoulder Angle | 70")
         
         ## Elbow init
-        #self.elbow = AngularServo(18, min_angle=-90, max_angle=90, pin_factory=self.factory)
-        #self.elbow.angle = 50
+        self.elbow = AngularServo(18, min_angle=-90, max_angle=90, pin_factory=self.factory)
+        self.elbow.angle = 50
         print(f"Elbow Angle | 50")
         self.angles = {"shoulder": 70, "elbow": 50, "waist": 0}
 

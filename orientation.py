@@ -75,12 +75,13 @@ class positions:
             self.orient["elbow"] = 50
             posit_array.append([0, 70, 50])
             delays.append(0.5)
-        posit_array.append([0, -40, -80])
-        delays.append(0.5)
+        posit_array.append([0, -20, -50])
+        delays.append(1.5)
         posit_array.append([0, 70, 50])
+        delays.append(0.5)
         
         
-        asyncio.run(self.move_servo(posit_array))
+        asyncio.run(self.move_servo(posit_array, delays))
     
     def jab(self):
         posit_array = []
@@ -140,4 +141,19 @@ class positions:
 
 if __name__ == "__main__":
     p = positions()
-    p.fist_bump()
+    while True:
+        x = input("Enter Orientation >>> ")
+        if x == "curl" or x == "cu":
+            p.curl()
+        elif x == "fb" or x == "b":
+            p.fist_bump()
+        elif x == "reset" or x == "r":
+            p.reset()
+        elif x == "wave" or x == "w":
+            p.wave()
+        elif x == "point" or x == "p":
+            p.point()
+        elif x == "jab" or x == "j":
+            p.jab()
+        
+        
