@@ -7,19 +7,43 @@ class move:
     def __init__(self):
         print("###HANK INITIALIZING###")
         self.factory = PiGPIOFactory()
-        self.shoulder = AngularServo(17, min_angle=-90, max_angle=90, pin_factory=self.factory)
-        self.shoulder.angle = 70
+        
+        ## Waist init
+        #self.waist = AngularServo(12, min_angle=-90, max_angle=90, pin_factory=self.factory)
+        #self.waist.angle = 0
+        print("Waist Angle | 0")
+        
+        ## Shoulder init
+        #self.shoulder = AngularServo(17, min_angle=-90, max_angle=90, pin_factory=self.factory)
+        #self.shoulder.angle = 70
         print(f"Shoulder Angle | 70")
-        self.elbow = AngularServo(18, min_angle=-90, max_angle=90, pin_factory=self.factory)
-        self.elbow.angle = 50
+        
+        ## Elbow init
+        #self.elbow = AngularServo(18, min_angle=-90, max_angle=90, pin_factory=self.factory)
+        #self.elbow.angle = 50
         print(f"Elbow Angle | 50")
         self.angles = {"shoulder": 70, "elbow": 50, "waist": 0}
 
+    ## Moves waist to a given degree
     async def move_waist(self, deg):
-        pass
+        if not isinstance(deg, int):
+            pass
+        elif -90 <= deg <= 90:
+            curr_angle = self.angles["waist"]
+            target = deg
+            self.shoulder.angle = target
+            if target != self.angles["waist"]:
+                self.angles["waist"] = target
+            print(f"Waist Angle | {target}")
+            await asyncio.sleep(0.5)
+        else:
+            print("Enter A Valid Number Between -90 and 40")
 
+    ## Moves shoulder to a given degree
     async def move_shoulder(self, deg):
-        if -90 <= deg <= 90:
+        if not isinstance(deg, int):
+            pass
+        elif -90 <= deg <= 90:
             curr_angle = self.angles["shoulder"]
             target = deg
             self.shoulder.angle = target
@@ -30,8 +54,11 @@ class move:
         else:
             print("Enter A Valid Number Between -90 and 40")
 
+    ## Moves elbow to a given degree
     async def move_elbow(self, deg):
-        if -90 <= deg <= 90:
+        if not isinstance(deg, int):
+            pass
+        elif -90 <= deg <= 90:
             curr_angle = self.angles["elbow"]
             target = deg
             self.elbow.angle = target
@@ -47,11 +74,14 @@ async def main():
     m = move()
     while True:
         d = input("Enter number degree: ")
+
+        ## Resets waist to 0, shoulder to 70, and elbow to 50
         if d == "reset" or d == "r":
             await asyncio.gather(
             m.move_shoulder(70),
             m.move_elbow(50)
         )
+            
         ##curls up
         elif d == "curl" or d == "cu":
             await asyncio.gather(
@@ -64,7 +94,8 @@ async def main():
                 m.move_shoulder(0),
                 m.move_elbow(-90)
             )
-        
+
+
         ##Jabs and Double Jabs
         elif d == "jab" or d == "j":
             if m.angles["shoulder"] != 70 and m.angles["elbow"] != 50:
