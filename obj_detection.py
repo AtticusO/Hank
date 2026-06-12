@@ -11,8 +11,12 @@ class detect:
 
     def detection(self, frame):
         results = model.track(frame, persist=True)
-        tags = [results.names[int(cls.item())] for cls in results.boxes.cls]
-        cords = results.boxes.xyxy
+        for result in results:
+            # Get the predicted class IDs and convert them to names
+            tags = [result.names[int(cls.item())] for cls in result.boxes.cls]
+            cords = result.boxes.xyxy # [xmin, ymin, xmax, ymax] in pixels
+        print(f"Objects | {tags}")
+        print(f"Cordinates | {cords}")
         annotated_frame = results[0].plot()
         return annotated_frame, tags, cords
 
