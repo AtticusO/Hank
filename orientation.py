@@ -74,8 +74,8 @@ class positions:
             self.orient["elbow"] = 50
             posit_array.append([0, 70, 50])
             delays.append(0.5)
-        posit_array.append([0, -20, -50])
-        delays.append(1.5)
+        posit_array.append([0, 20, -10])
+        delays.append(1)
         posit_array.append([0, 70, 50])
         delays.append(0.5)
         
@@ -124,14 +124,20 @@ class positions:
     def wave(self):
         posit_array = []
         delays = []
-        posit_array.append([0, 50, 0])
+        posit_array.append([0, 70, self.orient["elbow"]])
         delays.append(0.4)
-        posit_array.append([0, 80, 30])
-        delays.append(0.5)
-        posit_array.append([0, 40, 0])
-        delays.append(0.4)
+        posit_array.append([0, 70, 50])
+        delays.append(0.01)
+        posit_array.append([0, 70, -30])
+        delays.append(0.2)
+        posit_array.append([0, 70, 50])
+        delays.append(0.01)
+        posit_array.append([0, 70, -30])
+        delays.append(0.2)
+
 
         asyncio.run(self.move_servo(posit_array, delays))
+        self.reset()
     
 
     
@@ -157,5 +163,4 @@ if __name__ == "__main__":
             p.point()
         elif x == "jab" or x == "j":
             p.jab()
-        
         
