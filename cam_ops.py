@@ -1,19 +1,23 @@
 import cv2
+import threading
 
 class Cam:
-    def __init__(self, port):
-        self.cam_port = port
-        self.cap = cv2.VideoCapture(self.cam_port)
+    def __init__(self, port, width=640, height=480):
+        self.cap = cv2.VideoCapture(port)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        self.frame = None
+        self._lock = threading.Lock()
+        threading.Thread(target=self._reader, daemon=True).start()
+
+    def _reader(self):
+        while True:
+            ret, frame = self.cap.read()
+            if ret:
+                with self._lock:
+                    self.frame = frame
 
     def stream(self):
-        if not self.cap.isOpened():
-            print("Error: Could not open the camera.")
-            return None
-
-        ret, frame = self.cap.read()
-
-        # If the frame was not grabbed successfully, break the loop
-        if ret:
-            return frame
-
-
+        with self._lock:
+            return self.frame

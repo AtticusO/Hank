@@ -37,8 +37,9 @@ class positions:
         delays = []
         curr_pos = self.orient["waist"]
         new_pos = curr_pos + deg
-        posit_array.append[new_pos, "-", "-"]
-        asyncio.run(self.move_servo(posit_array))
+        posit_array.append([new_pos, self.orient["shoulder"], self.orient["elbow"]])
+        delays.append(0.1)
+        asyncio.run(self.move_servo(posit_array, delays))
     
     ## Changes waist position incrementally
     def rotate_shoulder(self, deg):
@@ -46,9 +47,9 @@ class positions:
         delays = []
         curr_pos = self.orient["shoulder"]
         new_pos = curr_pos + deg
-        posit_array.append["-", new_pos, "-"]
+        posit_array.append([self.orient["waist"], new_pos, self.orient["elbow"]])
         delays.append(0.1)
-        asyncio.run(self.move_servo(posit_array))
+        asyncio.run(self.move_servo(posit_array, delays))
     
     ## Changes waist position incrementally
     def rotate_elbow(self, deg):
@@ -56,9 +57,9 @@ class positions:
         delays = []
         curr_pos = self.orient["elbow"]
         new_pos = curr_pos + deg
-        posit_array.append["-", "-", new_pos]
+        posit_array.append([self.orient["waist"], self.orient["shoulder"], new_pos])
         delays.append(0.1)
-        asyncio.run(self.move_servo(posit_array))
+        asyncio.run(self.move_servo(posit_array, delays))
     
 
 
@@ -163,4 +164,8 @@ if __name__ == "__main__":
             p.point()
         elif x == "jab" or x == "j":
             p.jab()
+        elif x == "waist":
+            p.rotate_waist(10)
+            time.sleep(0.5)
+            p.rotate_waist(-10)
         
