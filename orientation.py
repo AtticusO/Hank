@@ -117,7 +117,7 @@ class positions:
     def point(self):
         posit_array = []
         delays = []
-        posit_array.append([0, 0, -90])
+        posit_array.append([10, 0, -90])
         delays.append(0.4)
         
         asyncio.run(self.move_servo(posit_array, delays))
@@ -140,6 +140,46 @@ class positions:
         asyncio.run(self.move_servo(posit_array, delays))
         self.reset()
     
+    def bounce_left(self):
+        posit_array = []
+        delays = []
+        posit_array.append([-30, 30, 10])
+        delays.append(0.2)
+        posit_array.append([-70, 70, 50])
+        delays.append(0.01)
+        posit_array.append([-30, 30, 10])
+        delays.append(0.2)
+        posit_array.append([0, 70, 50])
+        delays.append(0.2)
+        
+        asyncio.run(self.move_servo(posit_array, delays))
+        self.reset()
+
+    def bounce_right(self):
+        posit_array = []
+        delays = []
+        posit_array.append([30, 30, 10])
+        delays.append(0.2)
+        posit_array.append([70, 70, 50])
+        delays.append(0.01)
+        posit_array.append([30, 30, 10])
+        delays.append(0.2)
+        posit_array.append([0, 70, 50])
+        delays.append(0.2)
+        
+        asyncio.run(self.move_servo(posit_array, delays))
+        self.reset()
+    
+    def point(self):
+        posit_array = []
+        delays = []
+        posit_array.append([0, 0, -90])
+        delays.append(0.2)
+
+        asyncio.run(self.move_servo(posit_array, delays))
+
+
+
 
     
 
@@ -164,6 +204,12 @@ if __name__ == "__main__":
             p.point()
         elif x == "jab" or x == "j":
             p.jab()
+        elif x == "pt":
+            p.point()
+        elif x == "br":
+            p.bounce_right()
+        elif x == "bl":
+            p.bounce_left()
         elif x == "waist":
             p.rotate_waist(10)
             time.sleep(0.5)

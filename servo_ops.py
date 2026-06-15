@@ -31,13 +31,13 @@ class move:
         elif -90 <= deg <= 90:
             curr_angle = self.angles["waist"]
             target = deg
-            self.shoulder.angle = target
+            self.waist.angle = target
             if target != self.angles["waist"]:
                 self.angles["waist"] = target
             print(f"Waist Angle | {target}")
             await asyncio.sleep(0.5)
         else:
-            print("Enter A Valid Number Between -90 and 40")
+            print("Enter A Valid Number Between -90 and 90")
 
     ## Moves shoulder to a given degree
     async def move_shoulder(self, deg):
@@ -52,7 +52,7 @@ class move:
             print(f"Shoulder Angle | {target}")
             await asyncio.sleep(0.5)
         else:
-            print("Enter A Valid Number Between -90 and 40")
+            print("Enter A Valid Number Between -90 and 90")
 
     ## Moves elbow to a given degree
     async def move_elbow(self, deg):
@@ -67,7 +67,7 @@ class move:
             print(f"Elbow Angle | {target}")
             await asyncio.sleep(0.5)
         else:
-            print("Enter A Valid Number Between -90 and 40")
+            print("Enter A Valid Number Between -90 and 90")
     
 
 async def main():

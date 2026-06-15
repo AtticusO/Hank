@@ -2,7 +2,6 @@ import cam_ops
 import obj_detection
 import cv2
 import time
-import servo_ops
 import asyncio
 import orientation
 
@@ -11,6 +10,7 @@ class acts:
         self.cam_init = cam_ops.Cam(0)
         self.model = obj_detection.detect()
         self.turn = orientation.positions()
+        self.positions = self.turn.orient
         self.last_tag_pos = None
     
     def move(self, servos, deg_change):
@@ -44,10 +44,11 @@ class acts:
             cords = det[2]
             if "person" in tags and f_count > 2:
                 x = self.avg_x(tags, cords, "person")
-                if x < 200:
-                    self.move(["shoulder"], 15)
-                elif x > 400:
-                    self.move(["shoulder"], -15)
+                if self.positions["waist"] <= 90 and self.positions["waist"] >= -90:
+                    if x < 200:
+                        self.move(["waist"], 15)
+                    elif x > 400:
+                        self.move(["waist"], -15)
                 f_count = 0
             fps = 1 / (time.time() - prev_time)
             prev_time = time.time()
@@ -75,6 +76,6 @@ class acts:
 
 if __name__ == "__main__":
     print("Executing Hank Protocals")
-    h = acts()
-    h.video()
+    a = acts()
+    a.video()
     #h.show(res)
