@@ -50,6 +50,14 @@ class acts:
                     elif x > 400:
                         self.move(["waist"], -15)
                 f_count = 0
+            elif ("cup" in tags or "mug" in tags) and f_count > 2:
+                x = self.avg_x(tags, cords, "cup")
+                if self.positions["waist"] <= 90 and self.positions["waist"] >= -90:
+                    if x < 200:
+                        self.move(["waist"], 15)
+                    elif x > 400:
+                        self.move(["waist"], -15)
+                f_count = 0
             fps = 1 / (time.time() - prev_time)
             prev_time = time.time()
             #cv2.putText(annotated_frame, f"FPS: {fps:.1f}", (10, 30),

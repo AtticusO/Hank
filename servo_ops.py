@@ -68,7 +68,6 @@ class move:
             await asyncio.sleep(0.5)
         else:
             print("Enter A Valid Number Between -90 and 90")
-    
 
 async def main():
     m = move()

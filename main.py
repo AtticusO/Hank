@@ -24,6 +24,7 @@ class Hank:
             frame = self.cam_init.stream()
             if frame is None:
                 continue
+            
             det = self.detect(frame)
             annotated_frame = det[0]
             tags = det[1]

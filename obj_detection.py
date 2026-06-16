@@ -11,11 +11,15 @@ class detect:
         self.focus = None
 
     def detection(self, frame):
-        results = model.track(frame, persist=True, imgsz=320, verbose=False, conf=0.5)
+
+        results = model.track(frame, persist=True, imgsz=320, verbose=False, conf=0.6)
         for result in results:
             tags = [result.names[int(cls.item())] for cls in result.boxes.cls]
             cords = result.boxes.xyxy
-        annotated_frame = results[0].plot()
+        if "person" in tags:
+            annotated_frame = results[0].plot()
+        else:
+            annotated_frame = frame
         return annotated_frame, tags, cords
 
 
