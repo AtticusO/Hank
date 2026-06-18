@@ -6,12 +6,13 @@ import asyncio
 import orientation
 
 class acts:
-    def __init__(self):
+    def __init__(self, tags, cords, distance):
         self.cam_init = cam_ops.Cam(0)
         self.model = obj_detection.detect()
         self.turn = orientation.positions()
         self.positions = self.turn.orient
         self.last_tag_pos = None
+
     
     def move(self, servos, deg_change):
         if "waist" in servos:
@@ -29,6 +30,28 @@ class acts:
         cords = results[2]
 
         return annotated_frame, tags, cords
+    
+    def pers_condit(self, tags, cords, distance):
+        if "person" in tags:
+            x = self.avg_x(tags, cords ,"person")
+            if self.positions["waist"] <= 90 and self.positions["waist"] >= -90:
+                    if x < 200:
+                        self.move(["waist"], 15)
+                    elif x > 400:
+                        self.move(["waist"], -15)
+
+        ## Distance Conditional, still need to figure out how exactly i could do this
+        if distance < 15:
+            if self.positions["shoulder"] <= 80 and self.positions["shoulder"] >= -80:
+                if self.positions["elbow"] <= 80 and self.positions["elbow"] >= -80:
+                    degree_change = 0
+                    for i in distance:
+                        if (i%2) == 0:
+                            degree_change += 1
+                    self.move(["shoulder", "elbow"], degree_change)
+
+
+
 
     def video(self):
         prev_time = time.time()
@@ -57,11 +80,17 @@ class acts:
                         self.move(["waist"], 15)
                     elif x > 400:
                         self.move(["waist"], -15)
+                    measure = self.meas.dist()
                 f_count = 0
+            elif f_count > 2:
+                measure = self.meas.dist()
             fps = 1 / (time.time() - prev_time)
             prev_time = time.time()
             #cv2.putText(annotated_frame, f"FPS: {fps:.1f}", (10, 30),
             #            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            
+            
+
 
             cv2.imshow("Hank View", annotated_frame)
             if cv2.waitKey(1) == ord('q'):

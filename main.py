@@ -1,5 +1,8 @@
 import cam_ops
 import obj_detection
+import personality
+import orientation
+import distance
 import cv2
 import time
 
@@ -8,6 +11,8 @@ class Hank:
     def __init__(self):
         self.cam_init = cam_ops.Cam(0)
         self.model = obj_detection.detect()
+        self.pers_cond = None
+        self.measure = distance.measure()
     
     def detect(self, frame):
         #frame = self.cam_init.stream()
@@ -18,9 +23,13 @@ class Hank:
 
         return annotated_frame, tags, results
 
+    def personal_conditionals(self, tags, cords, dist):
+        self.pers_cond = personality.acts(tags, cords, dist)
+
     def video(self):
         prev_time = time.time()
         while True:
+            f_count = 0
             frame = self.cam_init.stream()
             if frame is None:
                 continue
@@ -30,9 +39,13 @@ class Hank:
             tags = det[1]
             cords = det[2]
             print(tags)
+            if f_count > 2:
+                d = self.measure.dist()
+                if tags > 0:
+                    self.pers_cond = personality.acts(tags, cords, d)
 
-            fps = 1 / (time.time() - prev_time)
-            prev_time = time.time()
+            #fps = 1 / (time.time() - prev_time)
+            #prev_time = time.time()
             #cv2.putText(annotated_frame, f"FPS: {fps:.1f}", (10, 30),
             #            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
