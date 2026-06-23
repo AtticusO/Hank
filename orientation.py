@@ -1,6 +1,7 @@
 import servo_ops
 import asyncio
 import time
+from pynput import keyboard
 
 class positions:
     def __init__(self):
@@ -26,6 +27,26 @@ class positions:
             self.orient["elbow"] = servo_pos[i][2]
             time.sleep(delays[i])
 
+
+    def on_press(self, key):
+        try:
+        # Check for specific special keys like arrow keys
+            if key == keyboard.Key.up:
+                print(f"Up Arrow Pressed ||\n Shoulder angle {self.orient["shoulder"]}\n  Elbow angle {self.orient["elbow"]}")
+            elif key == keyboard.Key.down:
+                print(f"Down Arrow Pressed ||\n Shoulder angle {self.orient["shoulder"]}\n  Elbow angle {self.orient["elbow"]}")
+            elif key == keyboard.Key.left:
+                print(f"Left Arrow Pressed ||\n Waist angle {self.orient["Waist"]}\n Shoulder angle {self.orient["shoulder"]}\n  Elbow angle {self.orient["elbow"]}")
+            elif key == keyboard.Key.right:
+                print(f"Right Arrow Pressed ||\n Waist angle {self.orient["Waist"]}\n Shoulder angle {self.orient["shoulder"]}\n  Elbow angle {self.orient["elbow"]}")
+        except AttributeError:
+            print("!!!Error With Arrow Controls!!!")
+            pass
+
+    def on_release(key):
+        # Stop the listener by pressing the Escape key
+        if key == keyboard.Key.esc:
+            return False
 
 
 
@@ -122,6 +143,8 @@ class positions:
         
         asyncio.run(self.move_servo(posit_array, delays))
     
+
+    ### Different Waves for greetings
     def wave(self):
         posit_array = []
         delays = []
@@ -140,6 +163,34 @@ class positions:
         asyncio.run(self.move_servo(posit_array, delays))
         self.reset()
     
+    def wave_one(self):
+        posit_array = []
+        delays = []
+        posit_array.append([0, 70, self.orient["elbow"]])
+        delays.append(0.4)
+        posit_array.append([0, 70, 50])
+        delays.append(0.01)
+        posit_array.append([0, 70, -30])
+        delays.append(0.2)
+        posit_array.append([0, 70, 50])
+        delays.append(0.01)
+        posit_array.append([0, 70, -30])
+        delays.append(0.2)
+
+    def wave_two(self):
+        posit_array = []
+        delays = []
+        posit_array.append([0, 70, -90])
+        delays.append(0.4)
+        posit_array.append([20, self.orient["shoulder"], self.orient["elbow"]])
+        delays.append(0.01)
+        posit_array.append([0, self.orient["shoulder"], self.orient["elbow"]])
+        delays.append(0.2)
+        posit_array.append([-20, self.orient["shoulder"], self.orient["elbow"]])
+        delays.append(0.01)
+        self.reset()
+        delays.append(0.2)
+
     def bounce_left(self):
         posit_array = []
         delays = []
@@ -189,6 +240,8 @@ if __name__ == "__main__":
     p = positions()
     print("\n $$$   Hank Orientation System   $$$ \n")
     while True:
+        with keyboard.Listener(on_press=p.on_press, on_release=p.on_release) as listener:
+            listener.join()
         print("\n")
         x = input("Enter Orientation >>> ")
         print("\n")

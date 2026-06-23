@@ -4,6 +4,7 @@ import cv2
 import time
 import asyncio
 import orientation
+import random as r
 
 class acts:
     def __init__(self, tags, cords, distance):
@@ -11,9 +12,43 @@ class acts:
         self.model = obj_detection.detect()
         self.turn = orientation.positions()
         self.positions = self.turn.orient
-        self.last_tag_pos = None
+        self.actions = [["cups", "dance", "follow"], ["fist_bump", "handshake", "greetings"]]
+        self.tags = tags
+        self.cords = cords
+        self.person_time = 0
+        self.following = False
 
+
+    ### Greetings detection and activation functions
+    def greetings(self):
+        opt = r.randint(0,3)
+        if opt == 0:
+            self.turn.wave()
+        elif opt == 1:
+            self.turn.wave_one()
+        elif opt == 2:
+            self.turn.wave_two()
+
+    def check_greeting(self):
+        t = time.time()
+        ## \/ need to make work with real time \/ output
+        if (time.time() - self.person_time) > 30:
+            self.greetings()
     
+
+
+
+
+
+    def follow(self):
+        self.follow = True
+        x = self.avg_x(self.tags, self.cords ,"person")
+        if self.positions["waist"] <= 90 and self.positions["waist"] >= -90:
+                if x < 200:
+                    self.move(["waist"], 25)
+                elif x > 400:
+                    self.move(["waist"], -25)
+                    
     def move(self, servos, deg_change):
         if "waist" in servos:
             self.turn.rotate_waist(deg_change)
