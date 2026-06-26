@@ -2,6 +2,7 @@ import servo_ops
 import asyncio
 import time
 from pynput import keyboard
+from evdev import InputDevice, list_devices, categorize, ecodes
 
 class positions:
     def __init__(self):
@@ -27,33 +28,14 @@ class positions:
             self.orient["elbow"] = servo_pos[i][2]
             time.sleep(delays[i])
 
-
-    def on_press(self, key):
-        try:
-        # Check for specific special keys like arrow keys
-            if key == keyboard.Key.up:
-                print(f"Up Arrow Pressed ||\n Shoulder angle {self.orient["shoulder"]}\n  Elbow angle {self.orient["elbow"]}")
-            elif key == keyboard.Key.down:
-                print(f"Down Arrow Pressed ||\n Shoulder angle {self.orient["shoulder"]}\n  Elbow angle {self.orient["elbow"]}")
-            elif key == keyboard.Key.left:
-                print(f"Left Arrow Pressed ||\n Waist angle {self.orient["Waist"]}\n Shoulder angle {self.orient["shoulder"]}\n  Elbow angle {self.orient["elbow"]}")
-            elif key == keyboard.Key.right:
-                print(f"Right Arrow Pressed ||\n Waist angle {self.orient["Waist"]}\n Shoulder angle {self.orient["shoulder"]}\n  Elbow angle {self.orient["elbow"]}")
-        except AttributeError:
-            print("!!!Error With Arrow Controls!!!")
-            pass
-
-    def on_release(key):
-        # Stop the listener by pressing the Escape key
-        if key == keyboard.Key.esc:
-            return False
+    
 
 
 
     #### Additive Rotations for servos
 
     ## Changes waist position incrementally
-    def rotate_waist(self, deg):
+    async def rotate_waist(self, deg):
         posit_array = []
         delays = []
         curr_pos = self.orient["waist"]
@@ -63,7 +45,7 @@ class positions:
         asyncio.run(self.move_servo(posit_array, delays))
     
     ## Changes waist position incrementally
-    def rotate_shoulder(self, deg):
+    async def rotate_shoulder(self, deg):
         posit_array = []
         delays = []
         curr_pos = self.orient["shoulder"]
@@ -73,7 +55,7 @@ class positions:
         asyncio.run(self.move_servo(posit_array, delays))
     
     ## Changes waist position incrementally
-    def rotate_elbow(self, deg):
+    async def rotate_elbow(self, deg):
         posit_array = []
         delays = []
         curr_pos = self.orient["elbow"]
@@ -85,7 +67,39 @@ class positions:
 
 
 
+
+
+    ###########################
+    ### Arm Movements for keyboard control
+    def reach(self, deg):
+        posit_array = []
+        delays = []
+        curr_shoulder = self.orient["shoulder"]
+        new_shoulder = curr_shoulder + deg
+        curr_elbow = self.orient["elbow"]
+        if deg > 0:
+            new_elbow = curr_elbow + deg + 10
+        elif deg < 0:
+            new_elbow = curr_elbow + deg - 10
+        posit_array.append([self.orient["waist"], new_shoulder, new_elbow])
+        delays.append(0.1)
+        asyncio.run(self.move_servo(posit_array, delays))
+    
+    def rotate(self, deg):
+        posit_array = []
+        delays = []
+        curr_pos = self.orient["waist"]
+        new_pos = curr_pos + deg
+        posit_array.append([new_pos, self.orient["shoulder"], self.orient["elbow"]])
+        delays.append(0.1)
+        asyncio.run(self.move_servo(posit_array, delays))
+
+
+
+
+
     #### Preset Movements and Orientations
+
 
     ## Sets orientation for fist bump and loads to servo
     def fist_bump(self):
@@ -231,6 +245,69 @@ class positions:
 
 
 
+    def find_keyboard(self):
+    
+        for path in list_devices():
+            dev = InputDevice(path)
+            keys = dev.capabilities().get(ecodes.EV_KEY, [])
+            if ecodes.KEY_A in keys and ecodes.KEY_UP in keys:
+                return dev
+        raise RuntimeError("No keyboard found in /dev/input")
+    
+    
+    def listen(self):
+        dev = self.find_keyboard()
+
+        print(f"Listening on {dev.path} ({dev.name})")
+        posit_array = []
+        delays = []
+        for event in dev.read_loop():
+            if event.type != ecodes.EV_KEY:
+                continue
+            key = categorize(event)
+            if key.keystate != key.key_down:   # only on press, ignore release/hold
+                continue
+            if key.keycode == "KEY_UP":
+                print("Up PRESSED") 
+                try:
+                    asyncio.run(self.reach(-30))
+                except:
+                    print("Error in reach function")
+            elif key.keycode == "KEY_DOWN":
+                print("DOWN PRESSED")
+                try:
+                    asyncio.run(self.reach(30))
+                except:
+                    print("Error in reach function")
+
+            elif key.keycode == "KEY_LEFT":
+                print("LEFT PRESSED")
+                try:
+                    asyncio.run(self.rotate(30))
+                except:
+                    print("Error in rotate function")
+            elif key.keycode == "KEY_RIGHT":
+                print("RIGHT PRESSED")
+                try:
+                    asyncio.run(self.rotate(-30))
+                except:
+                    print("Error in rotate function")
+            elif key.keycode == "KEY_R":
+                print("RESET PRESSED")
+                try:
+                    self.reset()
+                except:
+                    print("Error in reset function")
+            elif key.keycode == "KEY_C":
+                print("CURL PRESSED")
+                try:
+                    self.curl()
+                except:
+                    print("Error in curl function")
+            elif key.keycode == "KEY_ESC":
+                break
+
+
 
     
 
@@ -239,32 +316,37 @@ class positions:
 if __name__ == "__main__":
     p = positions()
     print("\n $$$   Hank Orientation System   $$$ \n")
-    while True:
-        with keyboard.Listener(on_press=p.on_press, on_release=p.on_release) as listener:
-            listener.join()
-        print("\n")
-        x = input("Enter Orientation >>> ")
-        print("\n")
-        if x == "curl" or x == "cu":
-            p.curl()
-        elif x == "fb" or x == "b":
-            p.fist_bump()
-        elif x == "reset" or x == "r":
-            p.reset()
-        elif x == "wave" or x == "w":
-            p.wave()
-        elif x == "point" or x == "p":
-            p.point()
-        elif x == "jab" or x == "j":
-            p.jab()
-        elif x == "pt":
-            p.point()
-        elif x == "br":
-            p.bounce_right()
-        elif x == "bl":
-            p.bounce_left()
-        elif x == "waist":
-            p.rotate_waist(10)
+    settings = 0
+    if settings == 0:
+        print("Keyboard Controls: \n")
+        p.reset()
+        p.listen()
+    elif settings == 1:
+        while True:
+       
+            print("\n")
+            x = input("Enter Orientation >>> ")
+            print("\n")
+            if x == "curl" or x == "cu":
+                p.curl()
+            elif x == "fb" or x == "b":
+                p.fist_bump()
+            elif x == "reset" or x == "r":
+                p.reset()
+            elif x == "wave" or x == "w":
+                p.wave()
+            elif x == "point" or x == "p":
+                p.point()
+            elif x == "jab" or x == "j":
+                p.jab()
+            elif x == "pt":
+                p.point()
+            elif x == "br":
+                p.bounce_right()
+            elif x == "bl":
+                p.bounce_left()
+            elif x == "waist":
+                p.rotate_waist(10)
             time.sleep(0.5)
             p.rotate_waist(-10)
         
