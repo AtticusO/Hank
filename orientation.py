@@ -3,6 +3,7 @@ import asyncio
 import time
 from pynput import keyboard
 from evdev import InputDevice, list_devices, categorize, ecodes
+import select
 
 class positions:
     def __init__(self):
@@ -74,15 +75,18 @@ class positions:
     def reach(self, deg):
         posit_array = []
         delays = []
+
         curr_shoulder = self.orient["shoulder"]
         new_shoulder = curr_shoulder + deg
+        
         curr_elbow = self.orient["elbow"]
         if deg > 0:
             new_elbow = curr_elbow + deg + 10
         elif deg < 0:
             new_elbow = curr_elbow + deg - 10
+        
         posit_array.append([self.orient["waist"], new_shoulder, new_elbow])
-        delays.append(0.1)
+        
         asyncio.run(self.move_servo(posit_array, delays))
     
     def rotate(self, deg):
@@ -91,7 +95,7 @@ class positions:
         curr_pos = self.orient["waist"]
         new_pos = curr_pos + deg
         posit_array.append([new_pos, self.orient["shoulder"], self.orient["elbow"]])
-        delays.append(0.1)
+        
         asyncio.run(self.move_servo(posit_array, delays))
 
 
@@ -254,8 +258,62 @@ class positions:
                 return dev
         raise RuntimeError("No keyboard found in /dev/input")
     
-    
-    def listen(self):
+
+
+    def listen_hold(self):
+        """Hold-aware loop: tracks which keys are currently held and acts
+        repeatedly while they stay down, independent of OS key-repeat rate."""
+        dev = self.find_keyboard()
+        print(f"Listening on {dev.path} ({dev.name})")
+        held = set()
+
+        while True:
+            # Wait up to 0.05s for input; returns immediately if a key event is ready.
+            r, _, _ = select.select([dev.fd], [], [], 0.05)
+            if r:
+                for event in dev.read():
+                    if event.type != ecodes.EV_KEY:
+                        continue
+                    key = categorize(event)
+                    if key.keystate == key.key_down:
+                        held.add(key.keycode)
+                    elif key.keystate == key.key_up:
+                        held.discard(key.keycode)
+
+            if "KEY_ESC" in held:
+                break
+
+            # This block runs ~20x/sec for as long as a key stays held.
+            if "KEY_UP" in held:
+                print("Up PRESSED") 
+                try:
+                    asyncio.run(self.rotate_shoulder(-2))
+                except:
+                    print("Error in reach function")
+            if "KEY_DOWN" in held:
+                print("DOWN PRESSED")
+                try:
+                    asyncio.run(self.rotate_shoulder(2))
+                except:
+                    print("Error in reach function")
+            if "KEY_LEFT" in held:
+                print("LEFT PRESSED")
+                try:
+                    asyncio.run(self.rotate_elbow(2))
+                except:
+                    print("Error in rotate function")
+            if "KEY_RIGHT" in held:
+                print("RIGHT PRESSED")
+                try:
+                    asyncio.run(self.rotate_elbow(-2))
+                except:
+                    print("Error in rotate function")
+
+
+
+
+
+    def listen_press(self):
         dev = self.find_keyboard()
 
         print(f"Listening on {dev.path} ({dev.name})")
@@ -320,7 +378,7 @@ if __name__ == "__main__":
     if settings == 0:
         print("Keyboard Controls: \n")
         p.reset()
-        p.listen()
+        p.listen_hold()
     elif settings == 1:
         while True:
        
