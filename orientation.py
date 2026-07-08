@@ -15,7 +15,7 @@ class positions:
 
 
     ## Moves servos asyncronously
-    async def move_servo(self, servo_pos, delays):
+    async def move_servo(self, servo_pos, delays=None):
         for i in range(len(servo_pos)):
             print(servo_pos[i])
 
@@ -24,17 +24,44 @@ class positions:
                 self.servos.move_shoulder(servo_pos[i][1]),
                 self.servos.move_elbow(servo_pos[i][2])
             )
+
             self.orient["waist"] = servo_pos[i][0]
             self.orient["shoulder"] = servo_pos[i][1]
             self.orient["elbow"] = servo_pos[i][2]
-            time.sleep(delays[i])
+            if delays != None and delays[i] != None:
+                time.sleep(delays[i])
 
+    ## generates and returns servo positional array, posit_array, instead of directly calling servo movement
+    ## should fix the async issues by reducing the number of asyncs calling eachother
+    ## output from these functions get passed into the move_servo() function to update servo position
+    ## all of these functions return a list of servo degree positions in a [[waist,shoulder,elbow]] format
+    def waist(self, deg):
+        posit_array = []
+        delays = []
+        curr_pos = self.orient["waist"]
+        new_pos = curr_pos + deg
+        posit_array.append([new_pos, self.orient["shoulder"], self.orient["elbow"]])
+        return posit_array
+
+    def shoulder(self, deg):
+        posit_array = []
+        delays = []
+        curr_pos = self.orient["shoulder"]
+        new_pos = curr_pos + deg
+        posit_array.append([self.orient["waist"], new_pos, self.orient["elbow"]])
+        return posit_array
     
+    def elbow(self, deg):
+        posit_array = []
+        delays = []
+        curr_pos = self.orient["elbow"]
+        new_pos = curr_pos + deg
+        posit_array.append([self.orient["waist"], self.orient["shoulder"], new_pos])
+        return posit_array
 
 
-
-    #### Additive Rotations for servos
-
+    ##!!!!!THE FUNCTIONS BEING ASYNC WHILE CALLING ASYNC FUNCTIONS WHICH ARE CALLING ASYNC FUNCTION IS CAUSING ERRORS!!!!!
+    ## Additive Rotations for servos
     ## Changes waist position incrementally
     async def rotate_waist(self, deg):
         posit_array = []
@@ -64,11 +91,6 @@ class positions:
         posit_array.append([self.orient["waist"], self.orient["shoulder"], new_pos])
         delays.append(0.1)
         asyncio.run(self.move_servo(posit_array, delays))
-    
-
-
-
-
 
     ###########################
     ### Arm Movements for keyboard control
@@ -103,7 +125,6 @@ class positions:
 
 
     #### Preset Movements and Orientations
-
 
     ## Sets orientation for fist bump and loads to servo
     def fist_bump(self):
@@ -160,7 +181,7 @@ class positions:
         delays.append(0.4)
         
         asyncio.run(self.move_servo(posit_array, delays))
-    
+
 
     ### Different Waves for greetings
     def wave(self):
@@ -287,25 +308,29 @@ class positions:
             if "KEY_UP" in held:
                 print("Up PRESSED") 
                 try:
-                    asyncio.run(self.rotate_shoulder(-2))
+                    coords = self.shoulder(-2)
+                    asyncio.run(self.move_servo(coords))
                 except:
                     print("Error in reach function")
             if "KEY_DOWN" in held:
                 print("DOWN PRESSED")
                 try:
-                    asyncio.run(self.rotate_shoulder(2))
+                    coords = self.shoulder(-2)
+                    asyncio.run(self.move_servo(coords))
                 except:
                     print("Error in reach function")
             if "KEY_LEFT" in held:
                 print("LEFT PRESSED")
                 try:
-                    asyncio.run(self.rotate_elbow(2))
+                    coords = self.elbow(2)
+                    asyncio.run(self.move_servo(coords))
                 except:
                     print("Error in rotate function")
             if "KEY_RIGHT" in held:
                 print("RIGHT PRESSED")
                 try:
-                    asyncio.run(self.rotate_elbow(-2))
+                    coords = self.shoulder(-2)
+                    asyncio.run(self.move_servo(coords))
                 except:
                     print("Error in rotate function")
 
