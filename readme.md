@@ -1,0 +1,2 @@
+# Hank
+Hank is a robotic arm bartender whose main job is is to identify cups, he also can play songs from spotify which the user can select on a locally hosted html page, Hank will also be capable of being controlled through different modes, firstly arrow keys and the press of a key on the keyboard such as r to reset its position, secondly through typed commands, and finally through position adjustment determined by a YOLO inference model which will orient the robot toward the empty cup
