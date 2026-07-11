@@ -12,6 +12,10 @@ class positions:
                        "shoulder" : self.servos.angles["shoulder"], 
                        "elbow" : self.servos.angles["elbow"]}
         self.pos_log = []
+        for tags in self.orient:
+            self.pos_log.append(self.orient[tags])
+        
+
 
 
     ## Moves servos asyncronously
@@ -307,35 +311,23 @@ class positions:
             # This block runs ~20x/sec for as long as a key stays held.
             if "KEY_UP" in held:
                 print("Up PRESSED") 
-                try:
-                    coords = self.shoulder(-2)
-                    asyncio.run(self.move_servo(coords))
-                except:
-                    print("Error in reach function")
+                self.pos_log[1] += 5
+                asyncio.run(self.move_servo(self.pos_log))
+
             if "KEY_DOWN" in held:
                 print("DOWN PRESSED")
-                try:
-                    coords = self.shoulder(-2)
-                    asyncio.run(self.move_servo(coords))
-                except:
-                    print("Error in reach function")
+                self.pos_log[1] -= 5
+                asyncio.run(self.move_servo(self.pos_log))
+
             if "KEY_LEFT" in held:
                 print("LEFT PRESSED")
-                try:
-                    coords = self.elbow(2)
-                    asyncio.run(self.move_servo(coords))
-                except:
-                    print("Error in rotate function")
+                self.pos_log[2] += 5
+                asyncio.run(self.move_servo(self.pos_log))
+
             if "KEY_RIGHT" in held:
                 print("RIGHT PRESSED")
-                try:
-                    coords = self.shoulder(-2)
-                    asyncio.run(self.move_servo(coords))
-                except:
-                    print("Error in rotate function")
-
-
-
+                self.pos_log[2] -= 5
+                asyncio.run(self.move_servo(self.pos_log))
 
 
     def listen_press(self):
