@@ -1,5 +1,4 @@
 from gpiozero import DistanceSensor
-from time import sleep
 
 
 class measure:
@@ -8,11 +7,7 @@ class measure:
         self.sensor = DistanceSensor(echo=24, trigger=23)
 
     def dist(self):
-        
-        
-        # Print the distance in centimeters
-        d = self.sensor.distance * 10
+        # gpiozero reports meters, so convert to centimeters
+        d = self.sensor.distance * 100
         print(f"Distance: {d:.2f} cm")
         return d
-        
-

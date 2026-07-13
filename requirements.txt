@@ -1,0 +1,7 @@
+ultralytics
+opencv-python
+gpiozero
+pigpio
+evdev
+spotipy
+# picamera2 is NOT pip-installed on the Pi: sudo apt install python3-picamera2

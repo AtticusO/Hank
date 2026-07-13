@@ -1,50 +1,98 @@
-import socket
-import urllib.parse
+## Hank's music page server: serves index.html and small JSON endpoints
+## that drive Spotify playback through music.py.
+##
+##   GET  /            the song-selection page
+##   GET  /search?q=   search Spotify tracks
+##   GET  /status      what's playing right now
+##   POST /play        {"uri": "spotify:track:..."} start a track
+##   POST /pause       pause playback
+##   POST /resume      resume playback
 
-# Define server address and port
-HOST = '127.0.0.1'
+import json
+import os
+import urllib.parse
+from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+
+import music
+
+HOST = "0.0.0.0"   # reachable from phones on the LAN, not just this machine
 PORT = 8080
 
-# Create and configure the TCP socket
-server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-server_socket.bind((HOST, PORT))
-server_socket.listen(1)
+_DIR = os.path.dirname(os.path.abspath(__file__))
 
-print(f"Server running at http://{HOST}:{PORT}")
 
-# Load the HTML interface file
-with open("index.html", "r") as file:
-    html_content = file.read()
+class HankHandler(BaseHTTPRequestHandler):
 
-while True:
-    # Accept incoming browser connections
-    client_connection, client_address = server_socket.accept()
-    
-    # Receive the raw HTTP request data from the browser
-    request_data = client_connection.recv(1024).decode('utf-8')
-    
-    if not request_data:
-        client_connection.close()
-        continue
+    def _send_json(self, payload, status=200):
+        body = json.dumps(payload).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
-    # Isolate the first line of the HTTP header (e.g., "GET /?song=John HTTP/1.1")
-    top_line = request_data.split('\n')[0]
-    print(f"Received Request: {top_line}")
+    ## Runs a music.py call and wraps the outcome in a consistent JSON shape:
+    ## {"ok": true, "result": ...} on success, {"error": "..."} on failure
+    def _music_action(self, fn, *args):
+        try:
+            self._send_json({"ok": True, "result": fn(*args)})
+        except music.MusicError as e:
+            self._send_json({"error": str(e)}, 502)
 
-    # Check if a form submission exists in the URL path
-    if "?song=" in top_line:
-        # Extract the segment after '?song=' up to the next space character
-        query_string = top_line.split('?')[1].split(' ')[0]
-        parsed_params = urllib.parse.parse_qs(query_string)
-        
-        # Extract and sanitize the final input string
-        user_input = parsed_params.get('song', [''])[0]
-        print(f"\n[SUCCESS] Extracted HTML field value: {user_input}\n")
+    def _send_page(self):
+        with open(os.path.join(_DIR, "index.html"), "rb") as f:
+            body = f.read()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
-    # Send a standard HTTP 200 OK header and render the HTML page
-    response = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n" + html_content
-    client_connection.sendall(response.encode('utf-8'))
-    
-    # Safely close the client connection
-    client_connection.close()
+    def do_GET(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/":
+            self._send_page()
+        elif parsed.path == "/search":
+            q = urllib.parse.parse_qs(parsed.query).get("q", [""])[0].strip()
+            if not q:
+                self._send_json({"error": "empty search"}, 400)
+            else:
+                self._music_action(music.search, q)
+        elif parsed.path == "/status":
+            self._music_action(music.now_playing)
+        else:
+            self._send_json({"error": "not found"}, 404)
+
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path == "/play":
+            length = int(self.headers.get("Content-Length", 0))
+            try:
+                data = json.loads(self.rfile.read(length) or b"{}")
+            except json.JSONDecodeError:
+                self._send_json({"error": "invalid JSON"}, 400)
+                return
+            uri = data.get("uri")
+            if not uri:
+                self._send_json({"error": "missing uri"}, 400)
+            else:
+                self._music_action(music.play, uri)
+        elif parsed.path == "/pause":
+            self._music_action(music.pause)
+        elif parsed.path == "/resume":
+            self._music_action(music.resume)
+        else:
+            self._send_json({"error": "not found"}, 404)
+
+    ## One tidy log line per request instead of the default noise
+    def log_message(self, fmt, *args):
+        print(f"{self.address_string()} - {fmt % args}")
+
+
+if __name__ == "__main__":
+    server = ThreadingHTTPServer((HOST, PORT), HankHandler)
+    print(f"Hank music server running at http://{HOST}:{PORT}")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        server.server_close()

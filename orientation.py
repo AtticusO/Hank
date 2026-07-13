@@ -1,24 +1,28 @@
 import servo_ops
 import asyncio
 import time
-from pynput import keyboard
 from evdev import InputDevice, list_devices, categorize, ecodes
 import select
 
 class positions:
     def __init__(self):
         self.servos = servo_ops.move()
-        self.orient = {"waist" : self.servos.angles["waist"], 
-                       "shoulder" : self.servos.angles["shoulder"], 
+        self.orient = {"waist" : self.servos.angles["waist"],
+                       "shoulder" : self.servos.angles["shoulder"],
                        "elbow" : self.servos.angles["elbow"]}
         self.pos_log = []
         for tags in self.orient:
             self.pos_log.append(self.orient[tags])
-        
 
-
+    ## Keeps orient/pos_log in sync with what the servos actually did,
+    ## since the servo layer clamps angles to [-90, 90]
+    def _sync_state(self):
+        for i, name in enumerate(("waist", "shoulder", "elbow")):
+            self.orient[name] = self.servos.angles[name]
+            self.pos_log[i] = self.servos.angles[name]
 
     ## Moves servos asyncronously
+    ## servo_pos is a list of [waist, shoulder, elbow] positions
     async def move_servo(self, servo_pos, delays=None):
         for i in range(len(servo_pos)):
             print(servo_pos[i])
@@ -29,104 +33,60 @@ class positions:
                 self.servos.move_elbow(servo_pos[i][2])
             )
 
-            self.orient["waist"] = servo_pos[i][0]
-            self.orient["shoulder"] = servo_pos[i][1]
-            self.orient["elbow"] = servo_pos[i][2]
-            if delays != None and delays[i] != None:
-                time.sleep(delays[i])
+            self._sync_state()
+            if delays and i < len(delays) and delays[i] is not None:
+                await asyncio.sleep(delays[i])
 
     ## generates and returns servo positional array, posit_array, instead of directly calling servo movement
-    ## should fix the async issues by reducing the number of asyncs calling eachother
     ## output from these functions get passed into the move_servo() function to update servo position
     ## all of these functions return a list of servo degree positions in a [[waist,shoulder,elbow]] format
     def waist(self, deg):
-        posit_array = []
-        delays = []
-        curr_pos = self.orient["waist"]
-        new_pos = curr_pos + deg
-        posit_array.append([new_pos, self.orient["shoulder"], self.orient["elbow"]])
-        return posit_array
+        new_pos = self.orient["waist"] + deg
+        return [[new_pos, self.orient["shoulder"], self.orient["elbow"]]]
 
     def shoulder(self, deg):
-        posit_array = []
-        delays = []
-        curr_pos = self.orient["shoulder"]
-        new_pos = curr_pos + deg
-        posit_array.append([self.orient["waist"], new_pos, self.orient["elbow"]])
-        return posit_array
-    
+        new_pos = self.orient["shoulder"] + deg
+        return [[self.orient["waist"], new_pos, self.orient["elbow"]]]
+
     def elbow(self, deg):
-        posit_array = []
-        delays = []
-        curr_pos = self.orient["elbow"]
-        new_pos = curr_pos + deg
-        posit_array.append([self.orient["waist"], self.orient["shoulder"], new_pos])
-        return posit_array
+        new_pos = self.orient["elbow"] + deg
+        return [[self.orient["waist"], self.orient["shoulder"], new_pos]]
 
-
-    ##!!!!!THE FUNCTIONS BEING ASYNC WHILE CALLING ASYNC FUNCTIONS WHICH ARE CALLING ASYNC FUNCTION IS CAUSING ERRORS!!!!!
     ## Additive Rotations for servos
+    ## These are plain sync methods: each one is a single top-level
+    ## asyncio.run() call, so they can be used from normal code anywhere
     ## Changes waist position incrementally
-    async def rotate_waist(self, deg):
-        posit_array = []
-        delays = []
-        curr_pos = self.orient["waist"]
-        new_pos = curr_pos + deg
-        posit_array.append([new_pos, self.orient["shoulder"], self.orient["elbow"]])
-        delays.append(0.1)
-        asyncio.run(self.move_servo(posit_array, delays))
-    
-    ## Changes waist position incrementally
-    async def rotate_shoulder(self, deg):
-        posit_array = []
-        delays = []
-        curr_pos = self.orient["shoulder"]
-        new_pos = curr_pos + deg
-        posit_array.append([self.orient["waist"], new_pos, self.orient["elbow"]])
-        delays.append(0.1)
-        asyncio.run(self.move_servo(posit_array, delays))
-    
-    ## Changes waist position incrementally
-    async def rotate_elbow(self, deg):
-        posit_array = []
-        delays = []
-        curr_pos = self.orient["elbow"]
-        new_pos = curr_pos + deg
-        posit_array.append([self.orient["waist"], self.orient["shoulder"], new_pos])
-        delays.append(0.1)
-        asyncio.run(self.move_servo(posit_array, delays))
+    def rotate_waist(self, deg):
+        asyncio.run(self.move_servo(self.waist(deg), [0.1]))
+
+    ## Changes shoulder position incrementally
+    def rotate_shoulder(self, deg):
+        asyncio.run(self.move_servo(self.shoulder(deg), [0.1]))
+
+    ## Changes elbow position incrementally
+    def rotate_elbow(self, deg):
+        asyncio.run(self.move_servo(self.elbow(deg), [0.1]))
 
     ###########################
     ### Arm Movements for keyboard control
     def reach(self, deg):
-        posit_array = []
-        delays = []
+        new_shoulder = self.orient["shoulder"] + deg
 
-        curr_shoulder = self.orient["shoulder"]
-        new_shoulder = curr_shoulder + deg
-        
-        curr_elbow = self.orient["elbow"]
+        ## elbow follows the shoulder a little further to keep the reach straight
         if deg > 0:
-            new_elbow = curr_elbow + deg + 10
+            new_elbow = self.orient["elbow"] + deg + 10
         elif deg < 0:
-            new_elbow = curr_elbow + deg - 10
-        
-        posit_array.append([self.orient["waist"], new_shoulder, new_elbow])
-        
-        asyncio.run(self.move_servo(posit_array, delays))
-    
+            new_elbow = self.orient["elbow"] + deg - 10
+        else:
+            new_elbow = self.orient["elbow"]
+
+        posit_array = [[self.orient["waist"], new_shoulder, new_elbow]]
+        asyncio.run(self.move_servo(posit_array))
+
     def rotate(self, deg):
-        posit_array = []
-        delays = []
-        curr_pos = self.orient["waist"]
-        new_pos = curr_pos + deg
-        posit_array.append([new_pos, self.orient["shoulder"], self.orient["elbow"]])
-        
-        asyncio.run(self.move_servo(posit_array, delays))
-
-
-
-
+        new_pos = self.orient["waist"] + deg
+        posit_array = [[new_pos, self.orient["shoulder"], self.orient["elbow"]]]
+        asyncio.run(self.move_servo(posit_array))
 
     #### Preset Movements and Orientations
 
@@ -134,58 +94,37 @@ class positions:
     def fist_bump(self):
         posit_array = []
         delays = []
-        if self.orient["shoulder"] != 70 and self.orient["elbow"] != 50:
-            self.orient["shoulder"] = 70
-            self.orient["elbow"] = 50
+        if self.orient["shoulder"] != 70 or self.orient["elbow"] != 50:
             posit_array.append([0, 70, 50])
             delays.append(0.5)
         posit_array.append([0, 20, -10])
         delays.append(1)
         posit_array.append([0, 70, 50])
         delays.append(0.5)
-        
-        
+
         asyncio.run(self.move_servo(posit_array, delays))
-    
+
     def jab(self):
         posit_array = []
         delays = []
-        if self.orient["shoulder"] != 70 and self.orient["elbow"] != 50:
-            self.orient["shoulder"] = 70
-            self.orient["elbow"] = 50
+        if self.orient["shoulder"] != 70 or self.orient["elbow"] != 50:
             posit_array.append([0, 70, 50])
             delays.append(0.2)
         posit_array.append([0, -40, -80])
         delays.append(0.1)
         posit_array.append([0, 70, 50])
         delays.append(0.1)
-        
+
         asyncio.run(self.move_servo(posit_array, delays))
-    
+
     def reset(self):
-        posit_array = []
-        delays = []
-        posit_array.append([0, 70, 50])
-        delays.append(0.5)
-        
-        asyncio.run(self.move_servo(posit_array, delays))
+        asyncio.run(self.move_servo([[0, 70, 50]], [0.5]))
 
     def curl(self):
-        posit_array = []
-        delays = []
-        posit_array.append([0, 0, 90])
-        delays.append(0.4)
-        
-        asyncio.run(self.move_servo(posit_array, delays))
+        asyncio.run(self.move_servo([[0, 0, 90]], [0.4]))
 
     def point(self):
-        posit_array = []
-        delays = []
-        posit_array.append([10, 0, -90])
-        delays.append(0.4)
-        
-        asyncio.run(self.move_servo(posit_array, delays))
-
+        asyncio.run(self.move_servo([[0, 0, -90]], [0.2]))
 
     ### Different Waves for greetings
     def wave(self):
@@ -202,10 +141,9 @@ class positions:
         posit_array.append([0, 70, -30])
         delays.append(0.2)
 
-
         asyncio.run(self.move_servo(posit_array, delays))
         self.reset()
-    
+
     def wave_one(self):
         posit_array = []
         delays = []
@@ -220,6 +158,9 @@ class positions:
         posit_array.append([0, 70, -30])
         delays.append(0.2)
 
+        asyncio.run(self.move_servo(posit_array, delays))
+        self.reset()
+
     def wave_two(self):
         posit_array = []
         delays = []
@@ -231,8 +172,9 @@ class positions:
         delays.append(0.2)
         posit_array.append([-20, self.orient["shoulder"], self.orient["elbow"]])
         delays.append(0.01)
+
+        asyncio.run(self.move_servo(posit_array, delays))
         self.reset()
-        delays.append(0.2)
 
     def bounce_left(self):
         posit_array = []
@@ -245,7 +187,7 @@ class positions:
         delays.append(0.2)
         posit_array.append([0, 70, 50])
         delays.append(0.2)
-        
+
         asyncio.run(self.move_servo(posit_array, delays))
         self.reset()
 
@@ -260,34 +202,22 @@ class positions:
         delays.append(0.2)
         posit_array.append([0, 70, 50])
         delays.append(0.2)
-        
+
         asyncio.run(self.move_servo(posit_array, delays))
         self.reset()
-    
-    def point(self):
-        posit_array = []
-        delays = []
-        posit_array.append([0, 0, -90])
-        delays.append(0.2)
-
-        asyncio.run(self.move_servo(posit_array, delays))
-
-
 
     def find_keyboard(self):
-    
         for path in list_devices():
             dev = InputDevice(path)
             keys = dev.capabilities().get(ecodes.EV_KEY, [])
             if ecodes.KEY_A in keys and ecodes.KEY_UP in keys:
                 return dev
         raise RuntimeError("No keyboard found in /dev/input")
-    
-
 
     def listen_hold(self):
         """Hold-aware loop: tracks which keys are currently held and acts
-        repeatedly while they stay down, independent of OS key-repeat rate."""
+        repeatedly while they stay down, independent of OS key-repeat rate.
+        Left/right rotate the waist, up/down raise/lower the shoulder."""
         dev = self.find_keyboard()
         print(f"Listening on {dev.path} ({dev.name})")
         held = set()
@@ -309,33 +239,35 @@ class positions:
                 break
 
             # This block runs ~20x/sec for as long as a key stays held.
+            moved = False
             if "KEY_UP" in held:
-                print("Up PRESSED") 
+                print("UP PRESSED")
                 self.pos_log[1] += 5
-                asyncio.run(self.move_servo(self.pos_log))
+                moved = True
 
             if "KEY_DOWN" in held:
                 print("DOWN PRESSED")
                 self.pos_log[1] -= 5
-                asyncio.run(self.move_servo(self.pos_log))
+                moved = True
 
             if "KEY_LEFT" in held:
                 print("LEFT PRESSED")
-                self.pos_log[2] += 5
-                asyncio.run(self.move_servo(self.pos_log))
+                self.pos_log[0] += 5
+                moved = True
 
             if "KEY_RIGHT" in held:
                 print("RIGHT PRESSED")
-                self.pos_log[2] -= 5
-                asyncio.run(self.move_servo(self.pos_log))
+                self.pos_log[0] -= 5
+                moved = True
 
+            if moved:
+                # move_servo expects a list of [waist, shoulder, elbow] rows
+                asyncio.run(self.move_servo([list(self.pos_log)]))
 
     def listen_press(self):
         dev = self.find_keyboard()
 
         print(f"Listening on {dev.path} ({dev.name})")
-        posit_array = []
-        delays = []
         for event in dev.read_loop():
             if event.type != ecodes.EV_KEY:
                 continue
@@ -343,49 +275,25 @@ class positions:
             if key.keystate != key.key_down:   # only on press, ignore release/hold
                 continue
             if key.keycode == "KEY_UP":
-                print("Up PRESSED") 
-                try:
-                    asyncio.run(self.reach(-30))
-                except:
-                    print("Error in reach function")
+                print("UP PRESSED")
+                self.reach(-30)
             elif key.keycode == "KEY_DOWN":
                 print("DOWN PRESSED")
-                try:
-                    asyncio.run(self.reach(30))
-                except:
-                    print("Error in reach function")
-
+                self.reach(30)
             elif key.keycode == "KEY_LEFT":
                 print("LEFT PRESSED")
-                try:
-                    asyncio.run(self.rotate(30))
-                except:
-                    print("Error in rotate function")
+                self.rotate(30)
             elif key.keycode == "KEY_RIGHT":
                 print("RIGHT PRESSED")
-                try:
-                    asyncio.run(self.rotate(-30))
-                except:
-                    print("Error in rotate function")
+                self.rotate(-30)
             elif key.keycode == "KEY_R":
                 print("RESET PRESSED")
-                try:
-                    self.reset()
-                except:
-                    print("Error in reset function")
+                self.reset()
             elif key.keycode == "KEY_C":
                 print("CURL PRESSED")
-                try:
-                    self.curl()
-                except:
-                    print("Error in curl function")
+                self.curl()
             elif key.keycode == "KEY_ESC":
                 break
-
-
-
-    
-
 
 
 if __name__ == "__main__":
@@ -398,7 +306,6 @@ if __name__ == "__main__":
         p.listen_hold()
     elif settings == 1:
         while True:
-       
             print("\n")
             x = input("Enter Orientation >>> ")
             print("\n")
@@ -410,18 +317,15 @@ if __name__ == "__main__":
                 p.reset()
             elif x == "wave" or x == "w":
                 p.wave()
-            elif x == "point" or x == "p":
+            elif x == "point" or x == "p" or x == "pt":
                 p.point()
             elif x == "jab" or x == "j":
                 p.jab()
-            elif x == "pt":
-                p.point()
             elif x == "br":
                 p.bounce_right()
             elif x == "bl":
                 p.bounce_left()
             elif x == "waist":
                 p.rotate_waist(10)
-            time.sleep(0.5)
-            p.rotate_waist(-10)
-        
+                time.sleep(0.5)
+                p.rotate_waist(-10)

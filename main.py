@@ -4,64 +4,46 @@ import personality
 import orientation
 import distance
 import cv2
-import time
 
 
 class Hank:
+    ## Hank owns every piece of hardware exactly once and shares references;
+    ## creating a second Cam or servo stack crashes on the Pi
     def __init__(self):
-        self.cam_init = cam_ops.Cam(0)
-        self.model = obj_detection.detect()
-        self.pers_cond = None
+        self.cam = cam_ops.Cam(0)
+        self.detector = obj_detection.detect()
+        self.arm = orientation.positions()
         self.measure = distance.measure()
-    
+        self.pers = personality.acts(self.arm)
+
     def detect(self, frame):
-        #frame = self.cam_init.stream()
-        results = self.model.detection(frame)
-        annotated_frame = results[0]
-        tags = results[1]
-        cords = results[2]
-
-        return annotated_frame, tags, results
-
-    def personal_conditionals(self, tags, cords, dist):
-        self.pers_cond = personality.acts(tags, cords, dist)
+        annotated_frame, tags, cords = self.detector.detection(frame)
+        return annotated_frame, tags, cords
 
     def video(self):
-        prev_time = time.time()
+        f_count = 0
         while True:
-            f_count = 0
-            frame = self.cam_init.stream()
+            frame = self.cam.stream()
             if frame is None:
                 continue
-            
-            det = self.detect(frame)
-            annotated_frame = det[0]
-            tags = det[1]
-            cords = det[2]
-            print(tags)
-            if f_count > 2:
-                d = self.measure.dist()
-                if tags > 0:
-                    self.pers_cond = personality.acts(tags, cords, d)
 
-            #fps = 1 / (time.time() - prev_time)
-            #prev_time = time.time()
-            #cv2.putText(annotated_frame, f"FPS: {fps:.1f}", (10, 30),
-            #            cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+            annotated_frame, tags, cords = self.detect(frame)
+            f_count += 1
+
+            ## React every few frames so servo moves don't stall the video
+            if f_count > 2 and len(tags) > 0:
+                d = self.measure.dist()
+                self.pers.pers_condit(tags, cords, d)
+                f_count = 0
 
             cv2.imshow("Hank View", annotated_frame)
             if cv2.waitKey(1) == ord('q'):
                 break
         cv2.destroyAllWindows()
-    
-    def show(self, frame):
-        cv2.imshow("View", frame)
-
-    
+        self.cam.stop()
 
 
 if __name__ == "__main__":
     print("Executing Hank Protocals")
     h = Hank()
     h.video()
-    #h.show(res)

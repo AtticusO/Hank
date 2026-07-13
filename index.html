@@ -1,11 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hank's Bar &mdash; Music</title>
+<style>
+  :root {
+    --bg: #14100e;
+    --panel: #221b16;
+    --accent: #e0a458;
+    --text: #f3ede7;
+    --muted: #a2917f;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    min-height: 100vh;
+    padding-bottom: 6.5rem; /* keep results clear of the now-playing bar */
+  }
+  header { text-align: center; padding: 2rem 1rem 0.5rem; }
+  header h1 { color: var(--accent); letter-spacing: 0.12em; font-size: 1.7rem; }
+  header p { color: var(--muted); font-size: 0.9rem; margin-top: 0.35rem; }
 
-<html>
-    <head>
-        <style>
-            
-        </style>
-    </head>
+  .search { display: flex; gap: 0.5rem; max-width: 34rem; margin: 1.2rem auto; padding: 0 1rem; }
+  .search input {
+    flex: 1; min-width: 0;
+    padding: 0.75rem 1rem;
+    border-radius: 0.6rem;
+    border: 1px solid #3c3128;
+    background: var(--panel);
+    color: var(--text);
+    font-size: 1rem;
+  }
+  .search input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .search button {
+    padding: 0.75rem 1.3rem;
+    border: none; border-radius: 0.6rem;
+    background: var(--accent); color: #221600;
+    font-size: 1rem; font-weight: 600;
+    cursor: pointer;
+  }
+  .search button:active { transform: scale(0.97); }
 
+  #message { max-width: 34rem; margin: 0 auto 0.8rem; padding: 0 1rem; color: var(--muted); font-size: 0.95rem; text-align: center; }
+  #message.error { color: #e07358; }
+
+  #results { max-width: 34rem; margin: 0 auto; padding: 0 1rem; }
+  .track {
+    display: flex; align-items: center; gap: 0.8rem;
+    background: var(--panel);
+    border-radius: 0.6rem;
+    padding: 0.6rem 0.7rem;
+    margin-bottom: 0.5rem;
+  }
+  .track img { width: 48px; height: 48px; border-radius: 0.35rem; background: #000; flex-shrink: 0; }
+  .track .art-fallback {
+    width: 48px; height: 48px; border-radius: 0.35rem; flex-shrink: 0;
+    background: #3c3128; display: flex; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 1.3rem;
+  }
+  .track .info { flex: 1; min-width: 0; }
+  .track .info .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track .info .artist { color: var(--muted); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .track button {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--accent); border-radius: 2rem;
+    background: transparent; color: var(--accent);
+    font-size: 0.9rem; font-weight: 600;
+    cursor: pointer; flex-shrink: 0;
+  }
+  .track button:active { background: var(--accent); color: #221600; }
+
+  #nowbar {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    display: flex; align-items: center; gap: 0.8rem;
+    background: var(--panel);
+    border-top: 2px solid var(--accent);
+    padding: 0.65rem 1rem;
+  }
+  #nowbar img { width: 44px; height: 44px; border-radius: 0.35rem; background: #000; }
+  #nowbar .info { flex: 1; min-width: 0; }
+  #nowbar .info .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #nowbar .info .artist { color: var(--muted); font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #nowbar button {
+    width: 3rem; height: 3rem;
+    border: none; border-radius: 50%;
+    background: var(--accent); color: #221600;
+    font-size: 1.1rem; cursor: pointer; flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <h1>HANK&rsquo;S BAR</h1>
+    <p>Pick a song &mdash; the robot approves.</p>
+  </header>
+
+  <form class="search" id="searchForm">
+    <input id="searchInput" type="search" placeholder="Search Spotify..." autocomplete="off">
+    <button type="submit">Search</button>
+  </form>
+
+  <div id="message"></div>
+  <div id="results"></div>
+
+  <div id="nowbar" hidden>
+    <img id="nowArt" alt="">
+    <div class="info">
+      <div class="name" id="nowName"></div>
+      <div class="artist" id="nowArtist"></div>
+    </div>
+    <button id="playPause" title="Play/Pause">&#10074;&#10074;</button>
+  </div>
+
+<script>
+  const messageEl = document.getElementById("message");
+  const resultsEl = document.getElementById("results");
+  const nowbar = document.getElementById("nowbar");
+  let isPlaying = false;
+
+  function showMessage(text, isError) {
+    messageEl.textContent = text || "";
+    messageEl.classList.toggle("error", !!isError);
+  }
+
+  async function api(path, options) {
+    const res = await fetch(path, options);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    return data.result;
+  }
+
+  document.getElementById("searchForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const q = document.getElementById("searchInput").value.trim();
+    if (!q) return;
+    showMessage("Searching...");
+    resultsEl.innerHTML = "";
+    try {
+      const tracks = await api("/search?q=" + encodeURIComponent(q));
+      showMessage(tracks.length ? "" : "No songs found.");
+      for (const t of tracks) resultsEl.appendChild(trackRow(t));
+    } catch (err) {
+      showMessage(err.message, true);
+    }
+  });
+
+  function trackRow(t) {
+    const row = document.createElement("div");
+    row.className = "track";
+
+    if (t.album_art) {
+      const img = document.createElement("img");
+      img.src = t.album_art;
+      img.alt = "";
+      row.appendChild(img);
+    } else {
+      const fallback = document.createElement("div");
+      fallback.className = "art-fallback";
+      fallback.textContent = "♫";
+      row.appendChild(fallback);
+    }
+
+    const info = document.createElement("div");
+    info.className = "info";
+    const name = document.createElement("div");
+    name.className = "name";
+    name.textContent = t.name;
+    const artist = document.createElement("div");
+    artist.className = "artist";
+    artist.textContent = t.artist;
+    info.append(name, artist);
+    row.appendChild(info);
+
+    const btn = document.createElement("button");
+    btn.textContent = "Play";
+    btn.addEventListener("click", async () => {
+      btn.textContent = "...";
+      try {
+        await api("/play", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ uri: t.uri }),
+        });
+        showMessage("");
+        refreshStatus();
+      } catch (err) {
+        showMessage(err.message, true);
+      }
+      btn.textContent = "Play";
+    });
+    row.appendChild(btn);
+    return row;
+  }
+
+  document.getElementById("playPause").addEventListener("click", async () => {
+    try {
+      await api(isPlaying ? "/pause" : "/resume", { method: "POST" });
+      refreshStatus();
+    } catch (err) {
+      showMessage(err.message, true);
+    }
+  });
+
+  async function refreshStatus() {
+    try {
+      const now = await api("/status");
+      if (!now) { nowbar.hidden = true; return; }
+      nowbar.hidden = false;
+      document.getElementById("nowName").textContent = now.name;
+      document.getElementById("nowArtist").textContent = now.artist;
+      document.getElementById("nowArt").src = now.album_art || "";
+      isPlaying = now.is_playing;
+      document.getElementById("playPause").innerHTML = isPlaying ? "&#10074;&#10074;" : "&#9654;";
+    } catch (err) {
+      // stay quiet on status polls; the bar just won't update
+    }
+  }
+
+  refreshStatus();
+  setInterval(refreshStatus, 5000);
+</script>
+</body>
 </html>
-
-

@@ -12,10 +12,12 @@ class Cam:
         self.picam2.start()
         self.frame = None
         self._lock = threading.Lock()
-        threading.Thread(target=self._reader, daemon=True).start()
+        self._running = True
+        self._thread = threading.Thread(target=self._reader, daemon=True)
+        self._thread.start()
 
     def _reader(self):
-        while True:
+        while self._running:
             frame = self.picam2.capture_array()
             if frame is not None:
                 with self._lock:
@@ -24,6 +26,12 @@ class Cam:
     def stream(self):
         with self._lock:
             return self.frame
+
+    ## Stops the reader thread and releases the camera
+    def stop(self):
+        self._running = False
+        self._thread.join(timeout=1)
+        self.picam2.stop()
 
 
 if __name__ == "__main__":
@@ -35,3 +43,4 @@ if __name__ == "__main__":
         if cv2.waitKey(1) == ord('q'):
             break
     cv2.destroyAllWindows()
+    cam.stop()
