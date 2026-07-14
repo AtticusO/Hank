@@ -11,3 +11,8 @@ class measure:
         d = self.sensor.distance * 100
         print(f"Distance: {d:.2f} cm")
         return d
+
+if __name__ == "__main__":
+    m = measure()
+    while True:
+        d = m.dist()

@@ -242,24 +242,70 @@ class positions:
             moved = False
             if "KEY_UP" in held:
                 print("UP PRESSED")
-                self.pos_log[1] += 5
+                self.pos_log[1] -= 5
                 moved = True
 
             if "KEY_DOWN" in held:
                 print("DOWN PRESSED")
-                self.pos_log[1] -= 5
+                self.pos_log[1] += 5
                 moved = True
 
+            
             if "KEY_LEFT" in held:
                 print("LEFT PRESSED")
-                self.pos_log[0] += 5
+                self.pos_log[0] -= 5
                 moved = True
 
             if "KEY_RIGHT" in held:
                 print("RIGHT PRESSED")
+                self.pos_log[0] += 5
+                moved = True
+            
+
+
+            
+            if "KEY_W" in held:
+                print("LEFT PRESSED")
+                self.pos_log[2] -= 5
+                moved = True
+
+            if "KEY_E" in held:
+                print("RIGHT PRESSED")
+                self.pos_log[2] += 5
+                moved = True
+            
+            if "KEY_A" in held:
+                print("LEFT PRESSED")
+                self.pos_log[1] -= 5
+                moved = True
+
+            if "KEY_D" in held:
+                print("RIGHT PRESSED")
+                self.pos_log[1] += 5
+                moved = True
+            
+            if "KEY_Z" in held:
+                print("LEFT PRESSED")
                 self.pos_log[0] -= 5
                 moved = True
 
+            if "KEY_X" in held:
+                print("RIGHT PRESSED")
+                self.pos_log[0] += 5
+                moved = True
+
+
+
+
+            if "KEY_R" in held:
+                print("RESET PRESSED")
+                self.reset()
+            if "KEY_P" in held:
+                print("POINT PRESSED")
+                self.point()
+            if "KEY_C" in held:
+                print("CURL PRESSED")
+                self.curl()
             if moved:
                 # move_servo expects a list of [waist, shoulder, elbow] rows
                 asyncio.run(self.move_servo([list(self.pos_log)]))
