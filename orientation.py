@@ -20,7 +20,7 @@ class positions:
         for i, name in enumerate(("waist", "shoulder", "elbow")):
             self.orient[name] = self.servos.angles[name]
             self.pos_log[i] = self.servos.angles[name]
-
+    
     ## Moves servos asyncronously
     ## servo_pos is a list of [waist, shoulder, elbow] positions
     async def move_servo(self, servo_pos, delays=None):
