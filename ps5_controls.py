@@ -11,7 +11,7 @@ ps5.light.setColorI(0, 255, 0)
 
 while True:
     pos_log = pos.pos_log
-    print(f"Left Stick: ({ps5.state.LX}, {ps5.state.LY}) | Right Stick: ({ps5.state.RX}, {ps5.state.RY})")
+    #print(f"Left Stick: ({ps5.state.LX}, {ps5.state.LY}) | Right Stick: ({ps5.state.RX}, {ps5.state.RY})")
 
     bottons = {"cross" : ps5.state.cross, 
                "circle" : ps5.state.circle, 
@@ -27,31 +27,31 @@ while True:
     moved = False
 
     if triggers["L2"] == True:
-        print("WAIST LEFT")
+        print("\nWAIST LEFT")
         pos_log[0] += 5
         moved = True
     if triggers["R2"] == True:
-        print("WAIST RIGHT")
+        print("\nWAIST RIGHT")
         pos_log[0] -= 5
         moved = True
 
     if l_stick[0] > 25:
-        print("Shoulder Forward")
+        print("\nSHOULDER FORWARD")
         pos_log[1] += 5
         moved = True
 
     if l_stick[0] < -25:
-        print("Shoulder Back")
+        print("\nSHOULDER BACK")
         pos_log[1] -= 5
         moved = True
 
     if r_stick[0] > 25:
-        print("Shoulder Forward")
+        print("\nELBOW FORWARD")
         pos_log[2] -= 5
         moved = True
 
     if r_stick[0] < -25:
-        print("Shoulder Back")
+        print("\nELBOW BACK")
         pos_log[2] += 5
         moved = True
     
@@ -60,21 +60,21 @@ while True:
     
 
     if bottons["cross"] == True:
-        print("Cross PRESSED")
+        print("\nCross PRESSED")
         pos.reset()
 
     
     if bottons["square"] == True:
-        print("JAB PRESSED")
+        print("\nJAB PRESSED")
         pos.jab()
         moved = True
         
     if bottons["triangle"] == True:
-        print("POINT PRESSED")
+        print("\nPOINT PRESSED")
         pos.point()
 
     if bottons["circle"] == True:
-        print("CURL PRESSED")
+        print("\nCURL PRESSED")
         pos.curl()
 
     if moved:
