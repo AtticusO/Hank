@@ -12,7 +12,6 @@ import json
 import os
 import urllib.parse
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-
 import music
 
 HOST = "0.0.0.0"   # reachable from phones on the LAN, not just this machine
@@ -23,7 +22,7 @@ _DIR = os.path.dirname(os.path.abspath(__file__))
 
 class HankHandler(BaseHTTPRequestHandler):
 
-    def _send_json(self, payload, status=200):
+    def send_json(self, payload, status=200):
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -33,11 +32,11 @@ class HankHandler(BaseHTTPRequestHandler):
 
     ## Runs a music.py call and wraps the outcome in a consistent JSON shape:
     ## {"ok": true, "result": ...} on success, {"error": "..."} on failure
-    def _music_action(self, fn, *args):
+    def music_action(self, fn, *args):
         try:
-            self._send_json({"ok": True, "result": fn(*args)})
+            self.send_json({"ok": True, "result": fn(*args)})
         except music.MusicError as e:
-            self._send_json({"error": str(e)}, 502)
+            self.send_json({"error": str(e)}, 502)
 
     def _send_page(self):
         with open(os.path.join(_DIR, "index.html"), "rb") as f:
@@ -55,13 +54,13 @@ class HankHandler(BaseHTTPRequestHandler):
         elif parsed.path == "/search":
             q = urllib.parse.parse_qs(parsed.query).get("q", [""])[0].strip()
             if not q:
-                self._send_json({"error": "empty search"}, 400)
+                self.send_json({"error": "empty search"}, 400)
             else:
-                self._music_action(music.search, q)
+                self.music_action(music.search, q)
         elif parsed.path == "/status":
-            self._music_action(music.now_playing)
+            self.music_action(music.now_playing)
         else:
-            self._send_json({"error": "not found"}, 404)
+            self.send_json({"error": "not found"}, 404)
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
@@ -70,11 +69,11 @@ class HankHandler(BaseHTTPRequestHandler):
             try:
                 data = json.loads(self.rfile.read(length) or b"{}")
             except json.JSONDecodeError:
-                self._send_json({"error": "invalid JSON"}, 400)
+                self.send_json({"error": "invalid JSON"}, 400)
                 return
             uri = data.get("uri")
             if not uri:
-                self._send_json({"error": "missing uri"}, 400)
+                self.send_json({"error": "missing uri"}, 400)
             else:
                 self._music_action(music.play, uri)
         elif parsed.path == "/pause":
@@ -82,7 +81,7 @@ class HankHandler(BaseHTTPRequestHandler):
         elif parsed.path == "/resume":
             self._music_action(music.resume)
         else:
-            self._send_json({"error": "not found"}, 404)
+            self.send_json({"error": "not found"}, 404)
 
     ## One tidy log line per request instead of the default noise
     def log_message(self, fmt, *args):

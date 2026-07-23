@@ -68,7 +68,7 @@ while True:
         print("\nJAB PRESSED")
         pos.jab()
         moved = True
-        
+
     if bottons["triangle"] == True:
         print("\nPOINT PRESSED")
         pos.point()

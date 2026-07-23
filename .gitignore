@@ -4,3 +4,4 @@ master.zip
 .claude
 __pycache__
 fable5_analysis.txt
+secrets.json
