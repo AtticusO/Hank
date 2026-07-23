@@ -90,6 +90,21 @@ class positions:
 
     #### Preset Movements and Orientations
 
+
+    def dance(self, bpm, playing=True):
+        sync = bpm / 4
+        while playing == True:
+            self.bounce_right()
+            time.sleep()
+    
+
+    def bounce(self, rate):
+        posit_array = []
+        for i in range(rate*rate):
+            asyncio.run(self.move_servo(posit_array))
+        
+
+
     ## Sets orientation for fist bump and loads to servo
     def fist_bump(self):
         posit_array = []

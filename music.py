@@ -2,19 +2,21 @@
 ##
 ## Needs these environment variables (create an app at
 ## https://developer.spotify.com/dashboard to get them):
-##   SPOTIPY_CLIENT_ID
-##   SPOTIPY_CLIENT_SECRET
-##   SPOTIPY_REDIRECT_URI   (e.g. http://127.0.0.1:9090/callback)
-##
 ## Playback lands on whatever Spotify Connect device is available — on the
 ## Pi itself that means running raspotify (https://github.com/dtcooper/raspotify).
 ## The first run asks you to open a URL and paste the redirect back in the
 ## terminal; after that spotipy's token cache handles refresh automatically.
-
+import json
 import os
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
 
+with open("secrets.json", "r") as file:
+    config = json.load(file)
+
+SPOTIPY_CLIENT_ID = config["id"]
+SPOTIPY_CLIENT_SECRET = config["secret"]
+SPOTIPY_REDIRECT_URI = "http://localhost.com"
 SCOPES = "user-modify-playback-state user-read-playback-state"
 
 _client = None
@@ -28,12 +30,15 @@ def _get_client():
     ## Lazy so importing this module never crashes when Spotify isn't set up yet
     global _client
     if _client is None:
-        if not (os.environ.get("SPOTIPY_CLIENT_ID") and os.environ.get("SPOTIPY_CLIENT_SECRET")):
-            raise MusicError(
-                "Spotify is not configured — set SPOTIPY_CLIENT_ID, "
-                "SPOTIPY_CLIENT_SECRET and SPOTIPY_REDIRECT_URI"
-            )
-        _client = spotipy.Spotify(auth_manager=SpotifyOAuth(scope=SCOPES, open_browser=False))
+        #if not (os.environ.get("SPOTIPY_CLIENT_ID") and os.environ.get("SPOTIPY_CLIENT_SECRET")):
+        #    raise MusicError(
+        #        "Spotify is not configured — set SPOTIPY_CLIENT_ID, "
+        #        "SPOTIPY_CLIENT_SECRET and SPOTIPY_REDIRECT_URI"
+        #    )
+        _client = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=SPOTIPY_CLIENT_ID,
+            client_secret=SPOTIPY_CLIENT_SECRET,
+            redirect_uri=SPOTIPY_REDIRECT_URI,
+            scope=SCOPES))
     return _client
 
 
@@ -123,7 +128,10 @@ def dance(track_id, track_name, artist):
         bpm = audio_features["tempo"]
         print(f"Song: {track_name} by {artist}")
         print(f"BPM: {bpm}")
+        return bpm
     else:
         print("Audio features not available for this track.")
 
 
+if __name__ == "__main__":
+    play("Gangsters Paradise")
