@@ -75,15 +75,15 @@ class HankHandler(BaseHTTPRequestHandler):
             if not uri:
                 self.send_json({"error": "missing uri"}, 400)
             else:
-                self._music_action(music.play, uri)
+                self.music_action(music.play, uri)
         elif parsed.path == "/pause":
-            self._music_action(music.pause)
+            self.music_action(music.pause)
         elif parsed.path == "/resume":
-            self._music_action(music.resume)
+            self.music_action(music.resume)
         else:
             self.send_json({"error": "not found"}, 404)
 
-    ## One tidy log line per request instead of the default noise
+    ## One log line per request instead of the default noise
     def log_message(self, fmt, *args):
         print(f"{self.address_string()} - {fmt % args}")
 
