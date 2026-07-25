@@ -1,5 +1,7 @@
 ## Hank's music page server: serves index.html and small JSON endpoints
-## that drive Spotify playback through music.py.
+## that drive Spotify playback through music.py
+## Need to make a queue system incase multiple people try to play songs
+## Need to 
 ##
 ##   GET  /            the song-selection page
 ##   GET  /search?q=   search Spotify tracks
@@ -8,13 +10,24 @@
 ##   POST /pause       pause playback
 ##   POST /resume      resume playback
 
+
 import json
 import os
+import socket
 import urllib.parse
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import music
+import subprocess
 
-HOST = "0.0.0.0"   # reachable from phones on the LAN, not just this machine
+## create a UDP socket to get lan ip
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.connect(("8.8.8.8", 80))
+lan_ip = s.getsockname()[0]
+s.close()
+
+subprocess.run(["spotify"])
+
+HOST = lan_ip   ## reachable from phones on the LAN
 PORT = 8080
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
