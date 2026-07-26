@@ -32,9 +32,10 @@ sudo apt install python3-picamera2   # Pi camera library comes from apt, not pip
 5. Actually attatch cup detection to servo movement
 6. Get distance.py working and implement distance detection into movement
 7. Set up some bash files to automatically configure bluetooth to connect to a PS5 controller
-8. Wire buttons and implement code for choosing mode of operation such as bartender or controlled
-9. Make dance functions with bpm from spotify
-10. Tie everything together in a somewhat cohesive process in main.py
+8. Make mock servos so I can 
+9. Wire buttons and implement code for choosing mode of operation such as bartender or controlled
+10. Make dance functions with bpm from spotify
+11. Tie everything together in a somewhat cohesive process in main.py
 
 
 

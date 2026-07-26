@@ -10,7 +10,6 @@
 ##   POST /pause       pause playback
 ##   POST /resume      resume playback
 
-
 import json
 import os
 import socket
@@ -46,6 +45,7 @@ class HankHandler(BaseHTTPRequestHandler):
     ## Runs a music.py call and wraps the outcome in a consistent JSON shape:
     ## {"ok": true, "result": ...} on success, {"error": "..."} on failure
     def music_action(self, fn, *args):
+        
         try:
             self.send_json({"ok": True, "result": fn(*args)})
         except music.MusicError as e:
@@ -71,6 +71,7 @@ class HankHandler(BaseHTTPRequestHandler):
             else:
                 self.music_action(music.search, q)
         elif parsed.path == "/status":
+
             self.music_action(music.now_playing)
         else:
             self.send_json({"error": "not found"}, 404)
