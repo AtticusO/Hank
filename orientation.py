@@ -20,7 +20,12 @@ class positions:
         for i, name in enumerate(("waist", "shoulder", "elbow")):
             self.orient[name] = self.servos.angles[name]
             self.pos_log[i] = self.servos.angles[name]
-    
+
+    def _sync_logs(self):
+        for i, n in enumerate(("waist", "shoulder", "elbow")):
+            self.orient[n] = self.pos_log[i]
+
+
     ## Moves servos asyncronously
     ## servo_pos is a list of [waist, shoulder, elbow] positions
     async def move_servo(self, servo_pos, delays=None):
@@ -32,27 +37,23 @@ class positions:
                 self.servos.move_shoulder(servo_pos[i][1]),
                 self.servos.move_elbow(servo_pos[i][2])
             )
-
-            self._sync_state()
             if delays and i < len(delays) and delays[i] is not None:
                 await asyncio.sleep(delays[i])
+            self._sync_state()
 
     ## generates and returns servo positional array, posit_array, instead of directly calling servo movement
     ## output from these functions get passed into the move_servo() function to update servo position
     ## all of these functions return a list of servo degree positions in a [[waist,shoulder,elbow]] format
     def waist(self, deg):
         new_pos = int(self.orient["waist"] + deg)
-        self._sync_state()
         return [[new_pos, self.orient["shoulder"], self.orient["elbow"]]]
 
     def shoulder(self, deg):
         new_pos = int(self.orient["shoulder"] + deg)
-        self._sync_state()
         return [[self.orient["waist"], new_pos, self.orient["elbow"]]]
 
     def elbow(self, deg):
         new_pos = int(self.orient["elbow"] + deg)
-        self._sync_state()
         return [[self.orient["waist"], self.orient["shoulder"], new_pos]]
 
     ## Additive Rotations for servos
@@ -91,9 +92,10 @@ class positions:
         posit_array = [[new_pos, self.orient["shoulder"], self.orient["elbow"]]]
         asyncio.run(self.move_servo(posit_array))
 
+
     #### Preset Movements and Orientations
 
-
+    ## Dance Moves and stuff
     def dance(self, bpm, playing=True):
         sync = abs(int((bpm / 60)*2))
         for i in range(4):
@@ -105,23 +107,24 @@ class positions:
     def bounce(self, rate, dir):
         if dir == "right":
             print("RIGHT")
-            self.orient["waist"] += rate
-            
-            self.orient["shoulder"] += rate
+            self.pos_log[0] += rate
+            self.pos_log[1] += rate
             print(f"Shoulder: {self.orient['shoulder']}")
-            self.orient["elbow"] += rate
+            self.pos_log[2] += rate
+
         elif dir == "left":
             print("LEFT")
             rate *= -1
-            self.orient["waist"] += rate
-            self.orient["shoulder"] += rate
+            self.pos_log[0] += rate
+            self.pos_log[1] += rate
             print(f"Shoulder: {self.orient['shoulder']}")
+            self.pos_log[2] += rate
 
-            self.orient["elbow"] += rate
-        for i in range(len(self.orient)):
-            self.pos_log[i] = list(self.orient.values())[i]
+        self._sync_logs()
+
         print(f"Pos_Log: {self.pos_log}\nRate: {rate}\nDir: {dir}")
-        asyncio.run(self.move_servo([self.pos_log]))
+
+        #asyncio.run(self.move_servo([self.pos_log]))
         
 
 
@@ -241,6 +244,8 @@ class positions:
         asyncio.run(self.move_servo(posit_array, delays))
         self.reset()
 
+    ## Keyboard hold controls
+
     def find_keyboard(self):
         for path in list_devices():
             dev = InputDevice(path)
@@ -295,9 +300,8 @@ class positions:
                 print("RIGHT PRESSED")
                 self.pos_log[0] += 5
                 moved = True
+
             
-
-
             
             if "KEY_W" in held:
                 print("LEFT PRESSED")
@@ -345,6 +349,7 @@ class positions:
                 # move_servo expects a list of [waist, shoulder, elbow] rows
                 asyncio.run(self.move_servo([list(self.pos_log)]))
 
+    ## Keyboard press controls
     def listen_press(self):
         dev = self.find_keyboard()
 
@@ -412,5 +417,5 @@ if __name__ == "__main__":
                 p.rotate_waist(-10)
     elif settings == 2:
         bpm = input("Enter BPM >>> ")
-        p.dance(int(bpm))
-        #p.bounce(int(4), "right")
+        #p.dance(int(bpm))
+        p.bounce(int(4), "right")

@@ -4,6 +4,7 @@ import personality
 import orientation
 import distance
 import cv2
+import ps5_controls
 
 
 class Hank:
@@ -15,6 +16,9 @@ class Hank:
         self.arm = orientation.positions()
         self.measure = distance.measure()
         self.pers = personality.acts(self.arm)
+        self.ps5 = ps5_controls.Controller(self.arm)
+
+
 
     def detect(self, frame):
         annotated_frame, tags, cords = self.detector.detection(frame)
@@ -42,8 +46,25 @@ class Hank:
         cv2.destroyAllWindows()
         self.cam.stop()
 
+    ## Mode control, setting mode 0 is bartender, mode 1 is keys control ([w,e],[a,d],[z,x]), 
+    ## setting mode 2 is PS5 Controller
+    def mode(self, setting):
+        if setting == 1:
+            self.arm.reset()
+            self.arm.listen_hold()
+        elif setting == 2:
+            c = self.ps5(self.arm)
+            while True:
+                c.remote()
+                if c.cancel == True:
+                    break
+        
 
 if __name__ == "__main__":
     print("Executing Hank Protocals")
     h = Hank()
-    h.video()
+    setting = 0
+    if setting != 0:
+        h.mode(setting)
+    else:
+        h.video()

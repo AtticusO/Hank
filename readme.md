@@ -28,11 +28,11 @@ sudo apt install python3-picamera2   # Pi camera library comes from apt, not pip
 1. Adjust 3D models & print and adjust again and print and adjust again
 2. Create queue in server.py for song selection
 3. Actually make personality.py
-4. Clean up servo functions in orientation.py so im not recreating same or similar variables across functions when i dont need to
+4. Clean up servo functions in orientation.py so im not recreating same or similar variables across functions when i dont need to (actually idk about this one its a good idea but most are just writing cords to move_servo() and im sorta of fine with that well see, file does need to be cleaned up a bit tho)
 5. Actually attatch cup detection to servo movement
 6. Get distance.py working and implement distance detection into movement
 7. Set up some bash files to automatically configure bluetooth to connect to a PS5 controller
-8. Make mock servos so I can 
+8. Make mock servos so I can test on devices other than rasp pi
 9. Wire buttons and implement code for choosing mode of operation such as bartender or controlled
 10. Make dance functions with bpm from spotify
 11. Tie everything together in a somewhat cohesive process in main.py
