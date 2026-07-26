@@ -1,5 +1,7 @@
 ## Hank's music page server: serves index.html and small JSON endpoints
-## that drive Spotify playback through music.py.
+## that drive Spotify playback through music.py
+## Need to make a queue system incase multiple people try to play songs
+## Need to 
 ##
 ##   GET  /            the song-selection page
 ##   GET  /search?q=   search Spotify tracks
@@ -10,11 +12,21 @@
 
 import json
 import os
+import socket
 import urllib.parse
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import music
+import subprocess
 
-HOST = "0.0.0.0"   # reachable from phones on the LAN, not just this machine
+## create a UDP socket to get lan ip
+s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+s.connect(("8.8.8.8", 80))
+lan_ip = s.getsockname()[0]
+s.close()
+
+subprocess.run(["spotify"])
+
+HOST = lan_ip   ## reachable from phones on the LAN
 PORT = 8080
 
 _DIR = os.path.dirname(os.path.abspath(__file__))
@@ -33,6 +45,7 @@ class HankHandler(BaseHTTPRequestHandler):
     ## Runs a music.py call and wraps the outcome in a consistent JSON shape:
     ## {"ok": true, "result": ...} on success, {"error": "..."} on failure
     def music_action(self, fn, *args):
+        
         try:
             self.send_json({"ok": True, "result": fn(*args)})
         except music.MusicError as e:
@@ -58,6 +71,7 @@ class HankHandler(BaseHTTPRequestHandler):
             else:
                 self.music_action(music.search, q)
         elif parsed.path == "/status":
+
             self.music_action(music.now_playing)
         else:
             self.send_json({"error": "not found"}, 404)
@@ -75,15 +89,15 @@ class HankHandler(BaseHTTPRequestHandler):
             if not uri:
                 self.send_json({"error": "missing uri"}, 400)
             else:
-                self._music_action(music.play, uri)
+                self.music_action(music.play, uri)
         elif parsed.path == "/pause":
-            self._music_action(music.pause)
+            self.music_action(music.pause)
         elif parsed.path == "/resume":
-            self._music_action(music.resume)
+            self.music_action(music.resume)
         else:
             self.send_json({"error": "not found"}, 404)
 
-    ## One tidy log line per request instead of the default noise
+    ## One log line per request instead of the default noise
     def log_message(self, fmt, *args):
         print(f"{self.address_string()} - {fmt % args}")
 

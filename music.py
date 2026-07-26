@@ -16,7 +16,7 @@ with open("secrets.json", "r") as file:
 
 SPOTIPY_CLIENT_ID = config["id"]
 SPOTIPY_CLIENT_SECRET = config["secret"]
-SPOTIPY_REDIRECT_URI = "http://localhost.com"
+SPOTIPY_REDIRECT_URI = "http://127.0.0.1:8080/callback"
 SCOPES = "user-modify-playback-state user-read-playback-state"
 
 _client = None
@@ -35,7 +35,8 @@ def _get_client():
         #        "Spotify is not configured — set SPOTIPY_CLIENT_ID, "
         #        "SPOTIPY_CLIENT_SECRET and SPOTIPY_REDIRECT_URI"
         #    )
-        _client = spotipy.Spotify(auth_manager=SpotifyOAuth(client_id=SPOTIPY_CLIENT_ID,
+        _client = spotipy.Spotify(auth_manager=SpotifyOAuth(
+            client_id=SPOTIPY_CLIENT_ID,
             client_secret=SPOTIPY_CLIENT_SECRET,
             redirect_uri=SPOTIPY_REDIRECT_URI,
             scope=SCOPES))
@@ -134,4 +135,5 @@ def dance(track_id, track_name, artist):
 
 
 if __name__ == "__main__":
-    play("Gangsters Paradise")
+    play(search("Little Wing"))
+    #play("Gangsters Paradise")

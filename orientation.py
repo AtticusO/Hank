@@ -42,14 +42,17 @@ class positions:
     ## all of these functions return a list of servo degree positions in a [[waist,shoulder,elbow]] format
     def waist(self, deg):
         new_pos = self.orient["waist"] + deg
+        self.pos_log = [new_pos, self.orient["shoulder"], self.orient["elbow"]]
         return [[new_pos, self.orient["shoulder"], self.orient["elbow"]]]
 
     def shoulder(self, deg):
         new_pos = self.orient["shoulder"] + deg
+        self.pos_log = [self.orient["waist"], new_pos, self.orient["elbow"]]
         return [[self.orient["waist"], new_pos, self.orient["elbow"]]]
 
     def elbow(self, deg):
         new_pos = self.orient["elbow"] + deg
+        self.pos_log = [self.orient["waist"], self.orient["shoulder"], new_pos]
         return [[self.orient["waist"], self.orient["shoulder"], new_pos]]
 
     ## Additive Rotations for servos
@@ -92,16 +95,24 @@ class positions:
 
 
     def dance(self, bpm, playing=True):
-        sync = bpm / 4
+        sync = ((bpm / 60) - (bpm%60))*2
         while playing == True:
-            self.bounce_right()
-            time.sleep()
+            self.bounce(sync, "right")
+            time.sleep(0.2)
+            self.bounce(sync, "left")
     
 
-    def bounce(self, rate):
-        posit_array = []
-        for i in range(rate*rate):
-            asyncio.run(self.move_servo(posit_array))
+    def bounce(self, rate, dir):
+        if dir == "right":
+            self.waist(rate)
+            self.shoulder(rate)
+            self.elbow(rate)
+        elif dir == "left":
+            rate *= -1
+            self.waist(rate)
+            self.shoulder(rate)
+            self.elbow(rate)
+        asyncio.run(self.move_servo(self.pos_log))
         
 
 
