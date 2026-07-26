@@ -41,18 +41,18 @@ class positions:
     ## output from these functions get passed into the move_servo() function to update servo position
     ## all of these functions return a list of servo degree positions in a [[waist,shoulder,elbow]] format
     def waist(self, deg):
-        new_pos = self.orient["waist"] + deg
-        self.pos_log = [new_pos, self.orient["shoulder"], self.orient["elbow"]]
+        new_pos = int(self.orient["waist"] + deg)
+        self._sync_state()
         return [[new_pos, self.orient["shoulder"], self.orient["elbow"]]]
 
     def shoulder(self, deg):
-        new_pos = self.orient["shoulder"] + deg
-        self.pos_log = [self.orient["waist"], new_pos, self.orient["elbow"]]
+        new_pos = int(self.orient["shoulder"] + deg)
+        self._sync_state()
         return [[self.orient["waist"], new_pos, self.orient["elbow"]]]
 
     def elbow(self, deg):
-        new_pos = self.orient["elbow"] + deg
-        self.pos_log = [self.orient["waist"], self.orient["shoulder"], new_pos]
+        new_pos = int(self.orient["elbow"] + deg)
+        self._sync_state()
         return [[self.orient["waist"], self.orient["shoulder"], new_pos]]
 
     ## Additive Rotations for servos
@@ -95,24 +95,33 @@ class positions:
 
 
     def dance(self, bpm, playing=True):
-        sync = ((bpm / 60) - (bpm%60))*2
-        while playing == True:
+        sync = abs(int((bpm / 60)*2))
+        for i in range(4):
             self.bounce(sync, "right")
-            time.sleep(0.2)
+            time.sleep(1)
             self.bounce(sync, "left")
-    
+            time.sleep(1)
 
     def bounce(self, rate, dir):
         if dir == "right":
-            self.waist(rate)
-            self.shoulder(rate)
-            self.elbow(rate)
+            print("RIGHT")
+            self.orient["waist"] += rate
+            
+            self.orient["shoulder"] += rate
+            print(f"Shoulder: {self.orient['shoulder']}")
+            self.orient["elbow"] += rate
         elif dir == "left":
+            print("LEFT")
             rate *= -1
-            self.waist(rate)
-            self.shoulder(rate)
-            self.elbow(rate)
-        asyncio.run(self.move_servo(self.pos_log))
+            self.orient["waist"] += rate
+            self.orient["shoulder"] += rate
+            print(f"Shoulder: {self.orient['shoulder']}")
+
+            self.orient["elbow"] += rate
+        for i in range(len(self.orient)):
+            self.pos_log[i] = list(self.orient.values())[i]
+        print(f"Pos_Log: {self.pos_log}\nRate: {rate}\nDir: {dir}")
+        asyncio.run(self.move_servo([self.pos_log]))
         
 
 
@@ -371,7 +380,7 @@ class positions:
 if __name__ == "__main__":
     p = positions()
     print("\n $$$   Hank Orientation System   $$$ \n")
-    settings = 0
+    settings = 2
     if settings == 0:
         print("Keyboard Controls: \n")
         p.reset()
@@ -401,3 +410,7 @@ if __name__ == "__main__":
                 p.rotate_waist(10)
                 time.sleep(0.5)
                 p.rotate_waist(-10)
+    elif settings == 2:
+        bpm = input("Enter BPM >>> ")
+        p.dance(int(bpm))
+        #p.bounce(int(4), "right")
