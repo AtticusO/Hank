@@ -105,26 +105,26 @@ class positions:
             time.sleep(1)
 
     def bounce(self, rate, dir):
+        pos = []
+        delays = []
         if dir == "right":
             print("RIGHT")
-            self.pos_log[0] += rate
-            self.pos_log[1] += rate
-            print(f"Shoulder: {self.orient['shoulder']}")
-            self.pos_log[2] += rate
-
+            for i in range(rate*2):
+                for i in range(len(self.pos_log)):
+                    self.pos_log[i] += rate
+                pos.append([self.pos_log[0], self.pos_log[1], self.pos_log[2]])
         elif dir == "left":
             print("LEFT")
-            rate *= -1
-            self.pos_log[0] += rate
-            self.pos_log[1] += rate
-            print(f"Shoulder: {self.orient['shoulder']}")
-            self.pos_log[2] += rate
+            for i in range(rate*2):
+                for i in range(len(self.pos_log)):
+                    self.pos_log[i] -= rate
+                pos.append([self.pos_log[0], self.pos_log[1], self.pos_log[2]])
 
         self._sync_logs()
 
         print(f"Pos_Log: {self.pos_log}\nRate: {rate}\nDir: {dir}")
 
-        #asyncio.run(self.move_servo([self.pos_log]))
+        #asyncio.run(self.move_servo([pos]))
         
 
 
