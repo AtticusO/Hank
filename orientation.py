@@ -98,33 +98,53 @@ class positions:
     ## Dance Moves and stuff
     def dance(self, bpm, playing=True):
         sync = abs(int((bpm / 60)*2))
-        for i in range(4):
-            self.bounce(sync, "right")
-            time.sleep(1)
-            self.bounce(sync, "left")
-            time.sleep(1)
+        self.center()
+        self.bounce(sync, "right")
+            #time.sleep(1)
+            #self.bounce(sync, "left")
+            #time.sleep(1)
 
     def bounce(self, rate, dir):
         pos = []
         delays = []
         if dir == "right":
             print("RIGHT")
-            for i in range(rate*2):
-                for i in range(len(self.pos_log)):
+
+            
+            for i in range(len(self.pos_log)):
+                if i == 0 or i == 1:
                     self.pos_log[i] += rate
-                pos.append([self.pos_log[0], self.pos_log[1], self.pos_log[2]])
+                elif i == 2:
+                    self.pos_log[i] -= rate
+            pos.append([self.pos_log[0], self.pos_log[1], self.pos_log[2]])
+            delays.append(0.2)
+            
+            for i in range(len(self.pos_log)):
+                if i == 0 or i == 2:
+                    self.pos_log[i] -= rate
+                elif i == 1:
+                    self.pos_log[i] += rate
+                
+            pos.append([self.pos_log[0], self.pos_log[1], self.pos_log[2]])
+            delays.append(0.2)
         elif dir == "left":
             print("LEFT")
-            for i in range(rate*2):
+            for i in range(int(rate/2)):
                 for i in range(len(self.pos_log)):
-                    self.pos_log[i] -= rate
+                    self.pos_log[i] -= (rate*2)
                 pos.append([self.pos_log[0], self.pos_log[1], self.pos_log[2]])
-
+                delays.append(0.1)
+            for i in range(int(rate/2)):
+                for i in range(len(self.pos_log)):
+                    self.pos_log[0] -= (rate*2)
+                    self.pos_log[1] += (rate*2)
+                    self.pos_log[2] += (rate*2)
+                pos.append([self.pos_log[0], self.pos_log[1], self.pos_log[2]])
+                delays.append(0.1)
         self._sync_logs()
 
         print(f"Pos_Log: {self.pos_log}\nRate: {rate}\nDir: {dir}")
-
-        #asyncio.run(self.move_servo([pos]))
+        asyncio.run(self.move_servo(pos, delays))
         
 
 
@@ -164,6 +184,8 @@ class positions:
     def point(self):
         asyncio.run(self.move_servo([[0, 0, -90]], [0.2]))
 
+    def center(self):
+        asyncio.run(self.move_servo([[45, 45, 45]], [0.1]))
     ### Different Waves for greetings
     def wave(self):
         posit_array = []
@@ -417,5 +439,5 @@ if __name__ == "__main__":
                 p.rotate_waist(-10)
     elif settings == 2:
         bpm = input("Enter BPM >>> ")
-        #p.dance(int(bpm))
-        p.bounce(int(4), "right")
+        p.dance(int(bpm))
+        #p.bounce(int(4), "right")

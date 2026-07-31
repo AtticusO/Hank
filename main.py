@@ -16,7 +16,7 @@ class Hank:
         self.arm = orientation.positions()
         self.measure = distance.measure()
         self.pers = personality.acts(self.arm)
-        self.ps5 = ps5_controls.Controller(self.arm)
+        self.ps5 = None
 
 
 
@@ -53,7 +53,7 @@ class Hank:
             self.arm.reset()
             self.arm.listen_hold()
         elif setting == 2:
-            c = self.ps5(self.arm)
+            self.ps5 = ps5_controls.Controller(self.arm)
             while True:
                 c.remote()
                 if c.cancel == True:
@@ -63,7 +63,7 @@ class Hank:
 if __name__ == "__main__":
     print("Executing Hank Protocals")
     h = Hank()
-    setting = 0
+    setting = 1
     if setting != 0:
         h.mode(setting)
     else:

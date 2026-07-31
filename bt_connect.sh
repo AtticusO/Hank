@@ -1,5 +1,8 @@
 #!/bin/bash
 
-BT_MAC = 90:BB:CC:DD:EE:FF
+BT_MAC=90:B6:85:C2:26:82
 
-echo -e "power on\nagent on\ndefault-agent\npair $DEVICE_MAC\ntrust $DEVICE_MAC\nconnect $DEVICE_MAC\nquit" | bluetoothctl
+bluetoothctl power on
+bluetoothctl pair "$BT_MAC"
+bluetoothctl trust "$BT_MAC"
+bluetoothctl connect "$BT_MAC"

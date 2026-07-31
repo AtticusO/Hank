@@ -24,7 +24,7 @@ s.connect(("8.8.8.8", 80))
 lan_ip = s.getsockname()[0]
 s.close()
 
-subprocess.run(["spotify"])
+#subprocess.run(["spotify"])
 
 HOST = lan_ip   ## reachable from phones on the LAN
 PORT = 8080
