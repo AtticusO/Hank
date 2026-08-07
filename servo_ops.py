@@ -19,7 +19,7 @@ class move:
             servo.angle = HOME[name]
             self.servos[name] = servo
             self.angles[name] = HOME[name]
-            print(f"{name.capitalize()} Angle | {HOME[name]}")
+            #print(f"{name.capitalize()} Angle | {HOME[name]}")
 
     ## Moves one servo to a given degree, clamped to [-90, 90].
     ## step > 0 sweeps toward the target in small increments so the arm
@@ -44,7 +44,7 @@ class move:
 
         self.servos[name].angle = target
         self.angles[name] = target
-        print(f"{name.capitalize()} Angle | {target}")
+        #print(f"{name.capitalize()} Angle | {target}")
         ## settle time scales with how far the servo still has to travel
         await asyncio.sleep(max(0.05, abs(delta) * 0.003) if step is None else 0.05)
 

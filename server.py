@@ -101,6 +101,14 @@ class HankHandler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
         print(f"{self.address_string()} - {fmt % args}")
 
+def _start_server():
+    server = ThreadingHTTPServer((HOST, PORT), HankHandler)
+    print(f"Hank music server running at http://{HOST}:{PORT}")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        server.server_close()
+
 
 if __name__ == "__main__":
     server = ThreadingHTTPServer((HOST, PORT), HankHandler)

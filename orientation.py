@@ -30,8 +30,8 @@ class positions:
     ## servo_pos is a list of [waist, shoulder, elbow] positions
     async def move_servo(self, servo_pos, delays=None):
         for i in range(len(servo_pos)):
-            print(servo_pos[i])
-
+            #print(servo_pos[i])
+            #print(f"MOVING TO :: {servo_pos[i]}")
             await asyncio.gather(
                 self.servos.move_waist(servo_pos[i][0]),
                 self.servos.move_shoulder(servo_pos[i][1]),
@@ -97,7 +97,7 @@ class positions:
 
     ## Dance Moves and stuff
     def dance(self, bpm, playing=True):
-        sync = abs(int((bpm / 60)*2))
+        sync = abs(int((bpm / 60)*3))
         self.center()
         self.bounce(sync, "right")
             #time.sleep(1)
@@ -105,45 +105,21 @@ class positions:
             #time.sleep(1)
 
     def bounce(self, rate, dir):
-        pos = []
-        delays = []
-        if dir == "right":
-            print("RIGHT")
+        ## Capture the start pose once so the return waypoint is exact even
+        ## if the extended pose gets clamped by the servo layer.
+        base = list(self.pos_log)
+        sign = -1 if dir == "left" else 1
+        print("LEFT" if sign < 0 else "RIGHT")
 
-            
-            for i in range(len(self.pos_log)):
-                if i == 0 or i == 1:
-                    self.pos_log[i] += rate
-                elif i == 2:
-                    self.pos_log[i] -= rate
-            pos.append([self.pos_log[0], self.pos_log[1], self.pos_log[2]])
-            delays.append(0.2)
-            
-            for i in range(len(self.pos_log)):
-                if i == 0 or i == 2:
-                    self.pos_log[i] -= rate
-                elif i == 1:
-                    self.pos_log[i] += rate
-                
-            pos.append([self.pos_log[0], self.pos_log[1], self.pos_log[2]])
-            delays.append(0.2)
-        elif dir == "left":
-            print("LEFT")
-            for i in range(int(rate/2)):
-                for i in range(len(self.pos_log)):
-                    self.pos_log[i] -= (rate*2)
-                pos.append([self.pos_log[0], self.pos_log[1], self.pos_log[2]])
-                delays.append(0.1)
-            for i in range(int(rate/2)):
-                for i in range(len(self.pos_log)):
-                    self.pos_log[0] -= (rate*2)
-                    self.pos_log[1] += (rate*2)
-                    self.pos_log[2] += (rate*2)
-                pos.append([self.pos_log[0], self.pos_log[1], self.pos_log[2]])
-                delays.append(0.1)
-        self._sync_logs()
+        ## Arc out to the side (waist swings in `dir`, shoulder lifts, elbow
+        ## tucks), then return to the captured base pose.
+        out = [base[0] + sign * rate, base[1] + rate, base[2] - rate]
+        back = [base[0], base[1], base[2]]
 
-        print(f"Pos_Log: {self.pos_log}\nRate: {rate}\nDir: {dir}")
+        pos = [out, back]
+        delays = [0.5, 0.3]
+
+        print(f"Pos: {pos}\nRate: {rate}\nDir: {dir}")
         asyncio.run(self.move_servo(pos, delays))
         
 
@@ -440,4 +416,4 @@ if __name__ == "__main__":
     elif settings == 2:
         bpm = input("Enter BPM >>> ")
         p.dance(int(bpm))
-        #p.bounce(int(4), "right")
+        #p.bounce(20, "right")

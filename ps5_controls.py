@@ -1,6 +1,8 @@
 from pydualsense import pydualsense
 import asyncio
 import subprocess
+import time
+import server
 
 
 subprocess.run(['bash', 'bt_connect.sh'])
@@ -18,7 +20,12 @@ class Controller:
         self.arm = arm
         self.pos_log = self.arm.pos_log
 
-        print(f"Left Stick: ({ps5.state.LX}, {ps5.state.LY}) | Right Stick: ({ps5.state.RX}, {ps5.state.RY})")
+        self.rate = 5
+
+        print(f"Left Stick: ({ps5.state.LX}, {ps5.state.LY}) | Right Stick: ({ps5.state.RX}, {ps5.state.RY})\nRate: {self.rate}")
+
+
+        self.dpad = {}
 
         self.buttons = {}
 
@@ -28,9 +35,16 @@ class Controller:
         self.l_stick = []
         self.r_stick = []
 
+        self.last_press = time.time()
         self.cancel = False
         self.moved = False
     def remote(self):
+
+
+        self.dpad = {"up" : ps5.state.DpadUp, 
+                "down" : ps5.state.DpadDown, 
+                "left" : ps5.state.DpadLeft, 
+                "right" : ps5.state.DpadRight}
 
         self.buttons = {"cross" : ps5.state.cross, 
                         "circle" : ps5.state.circle, 
@@ -45,37 +59,52 @@ class Controller:
         
         self.l_stick = [ps5.state.LX, ps5.state.LY]
         self.r_stick = [ps5.state.RX, ps5.state.RY]
+        
+        self.bumpers = {"L1" : ps5.state.L1,
+                        "R1" : ps5.state.R1}
 
-        self.cancel = False
-        self.moved = False
+        if self.dpad["up"] == True and self.last_press + 0.5 < time.time():
+           
+           self. rate += 1
+           self.last_press = time.time()
+           print("Rate: ", self.rate)
 
+        if self.bumpers["L1"] == True and self.bumpers["R1"] == True:
+            asyncio.run(self.start_server)
+
+        if self.dpad["down"] == True and self.last_press + 0.5 < time.time():
+            self.rate -= 1
+            self.last_press = time.time()
+            print("Rate: ", self.rate)
+
+        
         if self.triggers["L2"] == True:
             print("\nWAIST LEFT")
-            self.pos_log[0] += 5
+            self.pos_log[0] += self.rate
             self.moved = True
         if self.triggers["R2"] == True:
             print("\nWAIST RIGHT")
-            self.pos_log[0] -= 5
+            self.pos_log[0] -= self.rate
             self.moved = True
 
         if self.l_stick[0] > 25:
             print("\nSHOULDER FORWARD")
-            self.pos_log[1] += 5
+            self.pos_log[1] -= self.rate
             self.moved = True
 
         if self.l_stick[0] < -25:
             print("\nSHOULDER BACK")
-            self.pos_log[1] -= 5
+            self.pos_log[1] += self.rate
             self.moved = True
 
-        if self.r_stick[0] > 25:
+        if self.r_stick[1] > 25:
             print("\nELBOW FORWARD")
-            self.pos_log[2] -= 5
+            self.pos_log[2] += self.rate
             self.moved = True
 
-        if self.r_stick[0] < -25:
+        if self.r_stick[1] < -25:
             print("\nELBOW BACK")
-            self.pos_log[2] += 5
+            self.pos_log[2] -= self.rate
             self.moved = True
     
 
@@ -107,6 +136,12 @@ class Controller:
         if self.moved:
             # move_servo expects a list of [waist, shoulder, elbow] rows
             asyncio.run(self.arm.move_servo([self.pos_log]))
+            print(f"Current Position: {self.pos_log}")
+            self.moved = False
+    async def start_server():
+        server._start_server()
+
+
 
 if __name__ == "__main__":
     import orientation

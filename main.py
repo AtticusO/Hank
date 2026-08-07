@@ -5,6 +5,7 @@ import orientation
 import distance
 import cv2
 import ps5_controls
+import server
 
 
 class Hank:
@@ -54,16 +55,19 @@ class Hank:
             self.arm.listen_hold()
         elif setting == 2:
             self.ps5 = ps5_controls.Controller(self.arm)
-            while True:
-                c.remote()
-                if c.cancel == True:
-                    break
+            #while True:
+            #    c.remote()
+            #    if c.cancel == True:
+            #        break
+        elif setting == 3:
+            print("Starting Hank Music Server")
+            server._start_server()
         
 
 if __name__ == "__main__":
     print("Executing Hank Protocals")
     h = Hank()
-    setting = 1
+    setting = 3
     if setting != 0:
         h.mode(setting)
     else:
