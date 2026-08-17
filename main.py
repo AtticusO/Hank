@@ -2,9 +2,9 @@ import cam_ops
 import obj_detection
 import personality
 import orientation
-import distance
+#import distance
 import cv2
-import ps5_controls
+#import ps5_controls
 import server
 
 
@@ -15,7 +15,7 @@ class Hank:
         self.cam = cam_ops.Cam(0)
         self.detector = obj_detection.detect()
         self.arm = orientation.positions()
-        self.measure = distance.measure()
+        #self.measure = distance.measure()
         self.pers = personality.acts(self.arm)
         self.ps5 = None
 
@@ -37,8 +37,8 @@ class Hank:
 
             ## React every few frames so servo moves don't stall the video
             if f_count > 2 and len(tags) > 0:
-                d = self.measure.dist()
-                self.pers.pers_condit(tags, cords, d)
+                #d = self.measure.dist()
+                self.pers.follow(tags, cords)
                 f_count = 0
 
             cv2.imshow("Hank View", annotated_frame)
@@ -54,7 +54,8 @@ class Hank:
             self.arm.reset()
             self.arm.listen_hold()
         elif setting == 2:
-            self.ps5 = ps5_controls.Controller(self.arm)
+            pass
+            #self.ps5 = ps5_controls.Controller(self.arm)
             #while True:
             #    c.remote()
             #    if c.cancel == True:
@@ -67,7 +68,7 @@ class Hank:
 if __name__ == "__main__":
     print("Executing Hank Protocals")
     h = Hank()
-    setting = 3
+    setting = 0
     if setting != 0:
         h.mode(setting)
     else:

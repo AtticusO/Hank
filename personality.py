@@ -10,6 +10,7 @@ class acts:
         self.actions = [["cups", "dance", "follow"], ["fist_bump", "handshake", "greetings"]]
         self.person_time = 0
         self.following = False
+        self.tracked = []
 
     ### Greetings detection and activation functions
     def greetings(self):
@@ -26,12 +27,36 @@ class acts:
     def follow(self, tags, cords):
         self.following = True
         x = self.avg_x(tags, cords, "person")
-        if x is not None:
-            if x < 200:
-                self.move(["waist"], 25)
-            elif x > 400:
-                self.move(["waist"], -25)
+        y = self.avg_y(tags, cords, "person")
+        self.tracked.append([x, y])
+        if len(self.tracked) > 5:
+            self.tracked.pop(0)
 
+        #need to make leading mechanism work and actually make up for delay
+        leading = 0
+
+        for i in range(len(self.tracked)):
+            leading += self.tracked[-1*i][0] - self.tracked[i][0]
+        
+
+        if x is not None:
+            if leading > 50:
+                self.move(["waist"], 10)
+            elif leading < -50:
+                self.move(["waist"], -10)
+
+            
+            if x < 250:
+                self.move(["waist"], 10)
+            elif x > 350:
+                self.move(["waist"], -10)
+            
+            if y < 150:
+                self.move(["shoulder"], 10)
+                self.move(["elbow"], 10)
+            elif y > 300:
+                self.move(["shoulder"], -10)
+                self.move(["elbow"], -10)
     def move(self, servos, deg_change):
         if "waist" in servos:
             self.turn.rotate_waist(deg_change)
@@ -46,6 +71,7 @@ class acts:
 
         if "person" in tags:
             x = self.avg_x(tags, cords, "person")
+            y = self.avg_y(tags, cords, "person")
             if x is not None:
                 if x < 200:
                     self.move(["waist"], 15)
@@ -66,3 +92,10 @@ class acts:
             if tag == target_tag
         ]
         return sum(xs) / len(xs) if xs else None
+    def avg_y(self, tags, cords, target_tag):
+            xs = [
+                ((box[1] + box[3]) / 2).item()
+                for tag, box in zip(tags, cords)
+                if tag == target_tag
+            ]
+            return sum(xs) / len(xs) if xs else None
