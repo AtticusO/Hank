@@ -36,8 +36,8 @@ class acts:
         leading = 0
 
         for i in range(len(self.tracked)):
-            leading += self.tracked[-1*i][0] - self.tracked[i][0]
-        
+            while (i+1) <= len(self.tracked):
+                leading += self.tracked[i+1][0] - self.tracked[i][0]
 
         if x is not None:
             if leading > 50:
