@@ -1,37 +1,74 @@
-from gpiozero import AngularServo
-from gpiozero.pins.pigpio import PiGPIOFactory
+## servo_ops.py — the only module that talks to the servo hardware.
+##
+## `move` owns the three AngularServos. Nothing should call it directly any
+## more except servo_worker.ServoWorker (the single hardware owner); everything
+## else sets targets on the worker. With HANK_MOCK=1, or when gpiozero/pigpio
+## can't be imported (laptop), `move` is swapped for mock_servos.move so no
+## other file has to change.
+
 import asyncio
+import logging
 
-## Home position for each servo
-HOME = {"waist": 0, "shoulder": 70, "elbow": 50}
+import config
 
-## GPIO pin for each servo
-PINS = {"waist": 27, "shoulder": 17, "elbow": 18}
+log = logging.getLogger(__name__)
+
+try:
+    from gpiozero import AngularServo
+    from gpiozero.pins.pigpio import PiGPIOFactory
+    _HW = not config.MOCK
+except ImportError:
+    _HW = False
+
+## Kept as module constants for backwards compatibility with old imports
+HOME = dict(config.HOME)
+PINS = dict(config.SERVO_PINS)
+
 
 class move:
-    def __init__(self):
-        print("###HANK INITIALIZING###")
-        self.factory = PiGPIOFactory()
+    def __init__(self, factory=None):
+        log.info("### HANK INITIALIZING ###")
+        ## One pigpio factory shared with the distance sensor / buttons (pass it in)
+        self.factory = factory or PiGPIOFactory()
         self.servos = {}
         self.angles = {}
-        for name, pin in PINS.items():
-            servo = AngularServo(pin, min_angle=-90, max_angle=90, pin_factory=self.factory)
-            servo.angle = HOME[name]
+        for name, pin in config.SERVO_PINS.items():
+            lo, hi = config.PULSE_WIDTHS[name]
+            ## No feedback from hobby servos, so the first pulse always snaps the
+            ## joint to HOME from wherever it physically is (see FIXES_LOG.md §7.5).
+            servo = AngularServo(pin, min_angle=-90, max_angle=90,
+                                 min_pulse_width=lo, max_pulse_width=hi,
+                                 initial_angle=config.HOME[name],
+                                 pin_factory=self.factory)
             self.servos[name] = servo
-            self.angles[name] = HOME[name]
-            #print(f"{name.capitalize()} Angle | {HOME[name]}")
+            self.angles[name] = float(config.HOME[name])
+            log.debug("%s angle | %s", name.capitalize(), config.HOME[name])
 
-    ## Moves one servo to a given degree, clamped to [-90, 90].
-    ## step > 0 sweeps toward the target in small increments so the arm
-    ## moves smoothly; step=None jumps straight there for fast gestures.
-    async def move_to(self, name, deg, step=5):
+    ## Synchronous, immediate write (clamped to the per-joint limits).
+    ## The ServoWorker calls this ~100x/sec to glide; it never sleeps.
+    def set_angle(self, name, deg):
+        target = config.clamp(name, float(deg))
+        self.servos[name].angle = target       # also re-attaches a limp servo
+        self.angles[name] = target
+        return target
+
+    ## Go limp: stop sending pulses so the joint stops fighting you / buzzing
+    def detach(self, name):
+        self.servos[name].detach()
+
+    def detach_all(self):
+        for name in self.servos:
+            self.detach(name)
+
+    ## Old async API, kept so existing code and the CLI still work. Sweeps in
+    ## 1° steps every 4 ms (~250°/s) instead of the old 5° jumps.
+    async def move_to(self, name, deg, step=1):
         if not isinstance(deg, (int, float)):
-            print(f"{name}: angle must be a number, got {deg!r}")
+            log.warning("%s: angle must be a number, got %r", name, deg)
             return
-        target = max(-90, min(90, deg))
+        target = config.clamp(name, deg)
         if target != deg:
-            print(f"{name}: {deg} out of range, clamped to {target}")
-
+            log.info("%s: %s out of range, clamped to %s", name, deg, target)
         current = self.angles[name]
         delta = target - current
         if step and abs(delta) > step:
@@ -39,123 +76,71 @@ class move:
             a = current
             for _ in range(int(abs(delta) // step)):
                 a += direction * step
-                self.servos[name].angle = a
-                await asyncio.sleep(0.02)
+                self.set_angle(name, a)
+                await asyncio.sleep(0.004)
+        self.set_angle(name, target)
+        await asyncio.sleep(0.02)
 
-        self.servos[name].angle = target
-        self.angles[name] = target
-        #print(f"{name.capitalize()} Angle | {target}")
-        ## settle time scales with how far the servo still has to travel
-        await asyncio.sleep(max(0.05, abs(delta) * 0.003) if step is None else 0.05)
-
-    ## Moves waist to a given degree
-    async def move_waist(self, deg, step=5):
+    async def move_waist(self, deg, step=1):
         await self.move_to("waist", deg, step)
 
-    ## Moves shoulder to a given degree
-    async def move_shoulder(self, deg, step=5):
+    async def move_shoulder(self, deg, step=1):
         await self.move_to("shoulder", deg, step)
 
-    ## Moves elbow to a given degree
-    async def move_elbow(self, deg, step=5):
+    async def move_elbow(self, deg, step=1):
         await self.move_to("elbow", deg, step)
 
 
-async def main():
-    m = move()
+## ---- selection shim (fixes.md §5.2): mock replaces the class for all importers
+if not _HW:
+    from mock_servos import move  # noqa: F811,E402
 
-    ## Snaps shoulder/elbow out and back once (shared by jab and jj)
-    async def jab_once():
-        await asyncio.gather(
-            m.move_shoulder(-50, step=None),
-            m.move_elbow(-90, step=None)
-        )
-        await asyncio.sleep(0.1)
-        await asyncio.gather(
-            m.move_shoulder(70, step=None),
-            m.move_elbow(50, step=None)
-        )
 
-    ## Returns to home first so gestures always start from the same pose
-    async def home():
-        if m.angles["shoulder"] != 70 or m.angles["elbow"] != 50:
-            await asyncio.gather(
-                m.move_shoulder(70),
-                m.move_elbow(50)
-            )
-            await asyncio.sleep(0.05)
+## ---- servo command line: `python servo_ops.py`
+## Uses the same gesture table as the rest of Hank instead of its own copies.
+ALIASES = {"r": "reset", "cu": "curl", "pt": "point", "j": "jab", "w": "wave", "b": "fist_bump"}
 
-    while True:
-        d = input("Enter number degree: ")
 
-        ## Resets waist to 0, shoulder to 70, and elbow to 50
-        if d == "reset" or d == "r":
-            await asyncio.gather(
-                m.move_waist(0),
-                m.move_shoulder(70),
-                m.move_elbow(50)
-            )
+def main():
+    import gestures
+    from servo_worker import ServoWorker
 
-        ##curls up
-        elif d == "curl" or d == "cu":
-            await asyncio.gather(
-                m.move_shoulder(0),
-                m.move_elbow(90)
-            )
-        #upwards point
-        elif d == "point" or d == "pt":
-            await asyncio.gather(
-                m.move_shoulder(0),
-                m.move_elbow(-90)
-            )
-
-        ##Jabs and Double Jabs
-        elif d == "jab" or d == "j":
-            await home()
-            await jab_once()
-        elif d == "jj":
-            await home()
-            await jab_once()
-            await asyncio.sleep(0.3)
-            await jab_once()
-        elif d == "wave" or d == "w":
-            await asyncio.gather(
-                m.move_shoulder(50),
-                m.move_elbow(0)
-            )
-            await asyncio.sleep(0.2)
-            await asyncio.gather(
-                m.move_shoulder(80),
-                m.move_elbow(30)
-            )
-            await asyncio.sleep(0.4)
-            await asyncio.gather(
-                m.move_shoulder(40),
-                m.move_elbow(0)
-            )
-
-        elif "," in d:
-            ## "shoulder,elbow" or "waist,shoulder,elbow"
-            try:
-                angles = [int(a) for a in d.split(",")]
-            except ValueError:
-                print("$$$$ ANGLES MUST BE WHOLE NUMBERS, e.g. 70,50 or 0,70,50 $$$$")
-                continue
-            if len(angles) == 2:
-                await asyncio.gather(
-                    m.move_shoulder(angles[0]),
-                    m.move_elbow(angles[1])
-                )
-            elif len(angles) == 3:
-                await asyncio.gather(
-                    m.move_waist(angles[0]),
-                    m.move_shoulder(angles[1]),
-                    m.move_elbow(angles[2])
-                )
+    config.setup_logging()
+    worker = ServoWorker(move())
+    print("Commands: " + ", ".join(sorted(gestures.GESTURES)) +
+          ", jj (double jab), limp, q — or angles like 70,50 (shoulder,elbow) / 0,70,50")
+    try:
+        while True:
+            d = input("Enter command or angles: ").strip().lower()
+            d = ALIASES.get(d, d)
+            if d in ("q", "quit", "exit"):
+                break
+            if d in gestures.GESTURES:
+                worker.play_gesture(*gestures.get(d), wait=True)
+            elif d == "jj":
+                for _ in range(2):
+                    worker.play_gesture(*gestures.get("jab"), wait=True)
+            elif d == "limp":
+                worker.go_limp()
+            elif "," in d:
+                try:
+                    angles = [float(a) for a in d.split(",")]
+                except ValueError:
+                    print("Angles must be numbers, e.g. 70,50 or 0,70,50")
+                    continue
+                if len(angles) == 2:
+                    worker.set_targets({"shoulder": angles[0], "elbow": angles[1]})
+                elif len(angles) == 3:
+                    worker.set_targets(dict(zip(config.JOINTS, angles)))
+                else:
+                    print("Enter 2 angles (shoulder,elbow) or 3 (waist,shoulder,elbow)")
             else:
-                print("$$$$ ENTER 2 ANGLES (shoulder,elbow) OR 3 (waist,shoulder,elbow) $$$$")
-        else:
-            print("$$$$ PLEASE ENTER ANGLES IN A #,#,# FORMAT OR ENTER A COMMAND $$$$")
+                print("Unknown command")
+    except (KeyboardInterrupt, EOFError):
+        pass
+    finally:
+        worker.stop()
+
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()

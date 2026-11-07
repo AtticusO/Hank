@@ -1,6 +1,10 @@
 # Hank — Fixes & Improvement Plan
 
 A full pass over every file in the repo (2026-08-31). No code has been changed — this document is the plan.
+
+> **Implemented 2026-11-06** — see `FIXES_LOG.md` for what was done, where the implementation
+> deliberately differs from this plan (and why), and what still needs hardware or a decision from you.
+
 Each item says **what is wrong, why, and how to fix it**, with code sketches you can adapt.
 
 Priorities: **P0** = crashes / feature completely broken · **P1** = core feature doesn't do its job ·
@@ -13,7 +17,7 @@ Priorities: **P0** = crashes / feature completely broken · **P1** = core featur
 | # | Where | Problem | Priority |
 |---|-------|---------|----------|
 | 1 | `personality.py:38-40` | `follow()` leading loop → IndexError on first call, infinite loop after | **P0** |
-| 2 | `personality.py:31` | Appends `[None, None]` to track history when no person in frame | **P0** |
+| 2 | `personality.py:31` | Appends `[None, None]` to track history when no person in frame : FIXED with if not None check | **P0** |
 | 3 | `main.py:1-8` | Import-time side effects (`server` opens a socket, `music` reads secrets.json) crash main offline | **P0** |
 | 4 | `ps5_controls.py:72-73,141-142` | `asyncio.run(self.start_server)` raises; `start_server` missing `self`; L1+R1 double-bound | **P0** |
 | 5 | `music.py:138` | `play(search(...))` passes a list where a URI string is expected | **P0** |

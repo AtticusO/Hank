@@ -1,7 +1,16 @@
-ultralytics
-opencv-python
-gpiozero
-pigpio
-evdev
-spotipy
-# picamera2 is NOT pip-installed on the Pi: sudo apt install python3-picamera2
+## Pinned to the versions running on Hank's Pi (2026-11-06) so a reflash
+## reproduces a working install. Bump deliberately, one at a time.
+ultralytics==8.4.66        # pulls in torch, torchvision, numpy, PyYAML
+ncnn==1.0.20260526         # fast inference on the Pi (yolov8n_ncnn_model)
+opencv-python==4.13.0.92
+gpiozero==2.0.1
+pigpio==1.78
+evdev==1.9.3               # keyboard control (Linux only)
+spotipy==2.26.0
+requests==2.34.2           # Deezer BPM lookup (also an ultralytics dependency)
+pydualsense==0.7.5         # PS5 controller; needs: sudo apt install libhidapi-hidraw0
+
+## NOT from pip on the Pi:
+##   picamera2  ->  sudo apt install python3-picamera2
+##                  (create the venv with --system-site-packages so it's visible)
+##   pigpiod    ->  built from pigpio-master/ (see startup.sh for the service)

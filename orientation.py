@@ -1,419 +1,311 @@
-import servo_ops
-import asyncio
-import time
-from evdev import InputDevice, list_devices, categorize, ecodes
+## orientation.py — Hank's arm: poses, gestures, dance and keyboard control.
+##
+## `positions` owns one ServoWorker (the only thing that touches the servos)
+## and exposes the same public methods as before (reset, curl, jab, wave,
+## rotate_waist, ...). They no longer spin up an asyncio loop each: they set
+## worker targets or queue a gesture and return.
+##
+##   python orientation.py                 keyboard jog (default)
+##   python orientation.py --mode cli      type gesture names
+##   python orientation.py --mode dance --bpm 120
+
+import argparse
+import logging
 import select
+import threading
+import time
+
+import config
+import gestures
+import servo_ops
+from servo_worker import ServoWorker
+
+log = logging.getLogger(__name__)
+
 
 class positions:
-    def __init__(self):
-        self.servos = servo_ops.move()
-        self.orient = {"waist" : self.servos.angles["waist"],
-                       "shoulder" : self.servos.angles["shoulder"],
-                       "elbow" : self.servos.angles["elbow"]}
-        self.pos_log = []
-        for tags in self.orient:
-            self.pos_log.append(self.orient[tags])
+    def __init__(self, servos=None, worker=None, factory=None):
+        self.servos = servos or servo_ops.move(factory)
+        self.worker = worker or ServoWorker(self.servos)
+        self.dancing = threading.Event()
+        self._dance_stop = threading.Event()
 
-    ## Keeps orient/pos_log in sync with what the servos actually did,
-    ## since the servo layer clamps angles to [-90, 90]
-    def _sync_state(self):
-        for i, name in enumerate(("waist", "shoulder", "elbow")):
-            self.orient[name] = self.servos.angles[name]
-            self.pos_log[i] = self.servos.angles[name]
+    ## Where the arm is headed (commanded targets). Replaces the old orient dict
+    ## + pos_log list, two mirrors of the same state kept in sync by hand.
+    @property
+    def orient(self):
+        return self.worker.get_targets()
 
-    def _sync_logs(self):
-        for i, n in enumerate(("waist", "shoulder", "elbow")):
-            self.orient[n] = self.pos_log[i]
+    ## Where the arm actually is right now
+    def angles(self):
+        return self.worker.get_angles()
 
+    ## True while a gesture or the dance owns the arm (tracking should back off)
+    def busy(self):
+        return self.worker.busy() or self.dancing.is_set()
 
-    ## Moves servos asyncronously
-    ## servo_pos is a list of [waist, shoulder, elbow] positions
-    async def move_servo(self, servo_pos, delays=None):
-        for i in range(len(servo_pos)):
-            #print(servo_pos[i])
-            #print(f"MOVING TO :: {servo_pos[i]}")
-            await asyncio.gather(
-                self.servos.move_waist(servo_pos[i][0]),
-                self.servos.move_shoulder(servo_pos[i][1]),
-                self.servos.move_elbow(servo_pos[i][2])
-            )
-            if delays and i < len(delays) and delays[i] is not None:
-                await asyncio.sleep(delays[i])
-            self._sync_state()
+    def stop(self):
+        self.stop_dance()
+        self.worker.stop()
 
-    ## generates and returns servo positional array, posit_array, instead of directly calling servo movement
-    ## output from these functions get passed into the move_servo() function to update servo position
-    ## all of these functions return a list of servo degree positions in a [[waist,shoulder,elbow]] format
-    def waist(self, deg):
-        new_pos = int(self.orient["waist"] + deg)
-        return [[new_pos, self.orient["shoulder"], self.orient["elbow"]]]
+    ## ------------------------------------------------------ direct targets
+    def set_pose(self, pose):
+        self.worker.set_targets(pose)
 
-    def shoulder(self, deg):
-        new_pos = int(self.orient["shoulder"] + deg)
-        return [[self.orient["waist"], new_pos, self.orient["elbow"]]]
-
-    def elbow(self, deg):
-        new_pos = int(self.orient["elbow"] + deg)
-        return [[self.orient["waist"], self.orient["shoulder"], new_pos]]
-
-    ## Additive Rotations for servos
-    ## These are plain sync methods: each one is a single top-level
-    ## asyncio.run() call, so they can be used from normal code anywhere
-    ## Changes waist position incrementally
     def rotate_waist(self, deg):
-        asyncio.run(self.move_servo(self.waist(deg), [0.1]))
+        self.worker.nudge("waist", deg)
 
-    ## Changes shoulder position incrementally
     def rotate_shoulder(self, deg):
-        asyncio.run(self.move_servo(self.shoulder(deg), [0.1]))
+        self.worker.nudge("shoulder", deg)
 
-    ## Changes elbow position incrementally
     def rotate_elbow(self, deg):
-        asyncio.run(self.move_servo(self.elbow(deg), [0.1]))
+        self.worker.nudge("elbow", deg)
 
-    ###########################
-    ### Arm Movements for keyboard control
+    rotate = rotate_waist
+
+    ## elbow follows the shoulder a little further to keep the reach straight
     def reach(self, deg):
-        new_shoulder = self.orient["shoulder"] + deg
+        extra = 10 if deg > 0 else -10 if deg < 0 else 0
+        self.worker.nudge("shoulder", deg)
+        self.worker.nudge("elbow", deg + extra)
 
-        ## elbow follows the shoulder a little further to keep the reach straight
-        if deg > 0:
-            new_elbow = self.orient["elbow"] + deg + 10
-        elif deg < 0:
-            new_elbow = self.orient["elbow"] + deg - 10
-        else:
-            new_elbow = self.orient["elbow"]
+    def go_limp(self):
+        self.stop_dance()
+        self.worker.go_limp()
 
-        posit_array = [[self.orient["waist"], new_shoulder, new_elbow]]
-        asyncio.run(self.move_servo(posit_array))
+    ## ------------------------------------------------------------ gestures
+    ## wait=True blocks until the gesture finishes (the old behaviour);
+    ## wait=False queues it and returns immediately (vision / PS5 loops).
+    def gesture(self, name, wait=True):
+        return self.worker.play_gesture(*gestures.get(name), wait=wait)
 
-    def rotate(self, deg):
-        new_pos = self.orient["waist"] + deg
-        posit_array = [[new_pos, self.orient["shoulder"], self.orient["elbow"]]]
-        asyncio.run(self.move_servo(posit_array))
+    def reset(self, wait=True):
+        return self.gesture("reset", wait)
 
+    def center(self, wait=True):
+        return self.gesture("center", wait)
 
-    #### Preset Movements and Orientations
+    def curl(self, wait=True):
+        return self.gesture("curl", wait)
 
-    ## Dance Moves and stuff
-    def dance(self, bpm, playing=True):
-        sync = abs(int((bpm / 60)*3))
-        self.center()
-        self.bounce(sync, "right")
-            #time.sleep(1)
-            #self.bounce(sync, "left")
-            #time.sleep(1)
+    def point(self, wait=True):
+        return self.gesture("point", wait)
 
-    def bounce(self, rate, dir):
-        ## Capture the start pose once so the return waypoint is exact even
-        ## if the extended pose gets clamped by the servo layer.
-        base = list(self.pos_log)
+    def jab(self, wait=True):
+        return self.gesture("jab", wait)
+
+    def fist_bump(self, wait=True):
+        return self.gesture("fist_bump", wait)
+
+    def wave(self, wait=True):
+        return self.gesture("wave", wait)
+
+    def wave_two(self, wait=True):
+        return self.gesture("wave_two", wait)
+
+    def bounce_left(self, wait=True):
+        return self.gesture("bounce_left", wait)
+
+    def bounce_right(self, wait=True):
+        return self.gesture("bounce_right", wait)
+
+    ## One arc out to a side and back; amplitude scales with rate
+    def bounce(self, rate, dir, wait=True):
+        base = [self.orient[n] for n in config.JOINTS]
         sign = -1 if dir == "left" else 1
-        print("LEFT" if sign < 0 else "RIGHT")
-
-        ## Arc out to the side (waist swings in `dir`, shoulder lifts, elbow
-        ## tucks), then return to the captured base pose.
         out = [base[0] + sign * rate, base[1] + rate, base[2] - rate]
-        back = [base[0], base[1], base[2]]
+        log.debug("bounce %s rate=%s out=%s back=%s", dir, rate, out, base)
+        return self.worker.play_gesture([out, base], [0.5, 0.3], wait=wait)
 
-        pos = [out, back]
-        delays = [0.5, 0.3]
-
-        print(f"Pos: {pos}\nRate: {rate}\nDir: {dir}")
-        asyncio.run(self.move_servo(pos, delays))
-        
-
-
-    ## Sets orientation for fist bump and loads to servo
-    def fist_bump(self):
-        posit_array = []
-        delays = []
-        if self.orient["shoulder"] != 70 or self.orient["elbow"] != 50:
-            posit_array.append([0, 70, 50])
-            delays.append(0.5)
-        posit_array.append([0, 20, -10])
-        delays.append(1)
-        posit_array.append([0, 70, 50])
-        delays.append(0.5)
-
-        asyncio.run(self.move_servo(posit_array, delays))
-
-    def jab(self):
-        posit_array = []
-        delays = []
-        if self.orient["shoulder"] != 70 or self.orient["elbow"] != 50:
-            posit_array.append([0, 70, 50])
-            delays.append(0.2)
-        posit_array.append([0, -40, -80])
-        delays.append(0.1)
-        posit_array.append([0, 70, 50])
-        delays.append(0.1)
-
-        asyncio.run(self.move_servo(posit_array, delays))
-
-    def reset(self):
-        asyncio.run(self.move_servo([[0, 70, 50]], [0.5]))
-
-    def curl(self):
-        asyncio.run(self.move_servo([[0, 0, 90]], [0.4]))
-
-    def point(self):
-        asyncio.run(self.move_servo([[0, 0, -90]], [0.2]))
-
-    def center(self):
-        asyncio.run(self.move_servo([[45, 45, 45]], [0.1]))
-    ### Different Waves for greetings
-    def wave(self):
-        posit_array = []
-        delays = []
-        posit_array.append([0, 70, self.orient["elbow"]])
-        delays.append(0.4)
-        posit_array.append([0, 70, 50])
-        delays.append(0.01)
-        posit_array.append([0, 70, -30])
-        delays.append(0.2)
-        posit_array.append([0, 70, 50])
-        delays.append(0.01)
-        posit_array.append([0, 70, -30])
-        delays.append(0.2)
-
-        asyncio.run(self.move_servo(posit_array, delays))
+    ## --------------------------------------------------------------- dance
+    ## Swings side to side, one swing per beat, locked to the beat: each beat
+    ## arcs down through a dipped centre and up to the other side (a bounce),
+    ## and the time the move didn't use is absorbed so the cycle never drifts.
+    ## keep_going: cheap callable checked every beat (e.g. "is music playing").
+    def dance(self, bpm, keep_going=None, amplitude=None):
+        amplitude = config.DANCE_AMPLITUDE if amplitude is None else amplitude
+        beat = 60.0 / max(40.0, min(200.0, float(bpm)))
+        if beat < 0.45:                       # very fast songs: swing every 2nd beat
+            beat *= 2
+        keep_going = keep_going or (lambda: True)
+        self._dance_stop.clear()
+        self.dancing.set()
+        log.info("Dancing at %.0f BPM (%.2fs per swing)", bpm, beat)
+        dip = [0, 45, 45]                     # dance home pose
+        try:
+            self.worker.play_gesture([dip], [0.1], wait=True)
+            side = 1
+            next_beat = time.monotonic() + beat
+            while keep_going() and not self._dance_stop.is_set():
+                peak = [side * amplitude, 45 + amplitude // 2, 45 - amplitude // 2]
+                self.worker.play_gesture([dip, peak], [0, 0],
+                                         durations=[beat * 0.45, beat * 0.45], wait=True)
+                side = -side
+                delay = next_beat - time.monotonic()
+                if delay > 0:
+                    self._dance_stop.wait(delay)
+                    next_beat += beat
+                else:                         # fell behind: resync instead of rushing
+                    next_beat = time.monotonic() + beat
+        finally:
+            self.dancing.clear()
+        log.info("Dance stopped")
         self.reset()
 
-    def wave_one(self):
-        posit_array = []
-        delays = []
-        posit_array.append([0, 70, self.orient["elbow"]])
-        delays.append(0.4)
-        posit_array.append([0, 70, 50])
-        delays.append(0.01)
-        posit_array.append([0, 70, -30])
-        delays.append(0.2)
-        posit_array.append([0, 70, 50])
-        delays.append(0.01)
-        posit_array.append([0, 70, -30])
-        delays.append(0.2)
+    def stop_dance(self):
+        self._dance_stop.set()
 
-        asyncio.run(self.move_servo(posit_array, delays))
-        self.reset()
-
-    def wave_two(self):
-        posit_array = []
-        delays = []
-        posit_array.append([0, 70, -90])
-        delays.append(0.4)
-        posit_array.append([20, self.orient["shoulder"], self.orient["elbow"]])
-        delays.append(0.01)
-        posit_array.append([0, self.orient["shoulder"], self.orient["elbow"]])
-        delays.append(0.2)
-        posit_array.append([-20, self.orient["shoulder"], self.orient["elbow"]])
-        delays.append(0.01)
-
-        asyncio.run(self.move_servo(posit_array, delays))
-        self.reset()
-
-    def bounce_left(self):
-        posit_array = []
-        delays = []
-        posit_array.append([-30, 30, 10])
-        delays.append(0.2)
-        posit_array.append([-70, 70, 50])
-        delays.append(0.01)
-        posit_array.append([-30, 30, 10])
-        delays.append(0.2)
-        posit_array.append([0, 70, 50])
-        delays.append(0.2)
-
-        asyncio.run(self.move_servo(posit_array, delays))
-        self.reset()
-
-    def bounce_right(self):
-        posit_array = []
-        delays = []
-        posit_array.append([30, 30, 10])
-        delays.append(0.2)
-        posit_array.append([70, 70, 50])
-        delays.append(0.01)
-        posit_array.append([30, 30, 10])
-        delays.append(0.2)
-        posit_array.append([0, 70, 50])
-        delays.append(0.2)
-
-        asyncio.run(self.move_servo(posit_array, delays))
-        self.reset()
-
-    ## Keyboard hold controls
-
+    ## --------------------------------------------------- keyboard control
     def find_keyboard(self):
+        return KeyboardControl.find_keyboard()
+
+    def listen_hold(self):
+        KeyboardControl(self).run()
+
+    ## Press-only controls: one big step per key press
+    def listen_press(self):
+        from evdev import categorize, ecodes   # Linux only — lazy so Windows can import this file
+        dev = self.find_keyboard()
+        log.info("Listening on %s (%s)", dev.path, dev.name)
+        steps = {"KEY_UP": (self.reach, -30), "KEY_DOWN": (self.reach, 30),
+                 "KEY_LEFT": (self.rotate, 30), "KEY_RIGHT": (self.rotate, -30)}
+        for event in dev.read_loop():
+            if event.type != ecodes.EV_KEY:
+                continue
+            key = categorize(event)
+            if key.keystate != key.key_down:
+                continue
+            code = key.keycode
+            if code in steps:
+                fn, deg = steps[code]
+                fn(deg)
+            elif code == "KEY_R":
+                self.reset()
+            elif code == "KEY_C":
+                self.curl()
+            elif code == "KEY_ESC":
+                break
+
+
+class KeyboardControl:
+    ## Hold-aware keyboard jog. step() is non-blocking so main.py can run it
+    ## alongside other modes; run() loops it standalone.
+    ## held keys: (joint, degrees per tick) — 20 ticks/sec
+    HOLD_KEYS = {
+        "KEY_LEFT": ("waist", -5), "KEY_RIGHT": ("waist", +5),
+        "KEY_Z": ("waist", -5), "KEY_X": ("waist", +5),
+        "KEY_UP": ("shoulder", -5), "KEY_DOWN": ("shoulder", +5),
+        "KEY_A": ("shoulder", -5), "KEY_D": ("shoulder", +5),
+        "KEY_W": ("elbow", -5), "KEY_E": ("elbow", +5),
+    }
+    ## fire once per key-down, not every tick while held
+    PRESS_KEYS = {
+        "KEY_R": "reset", "KEY_P": "point", "KEY_C": "curl", "KEY_J": "jab",
+        "KEY_F": "fist_bump", "KEY_V": "wave", "KEY_B": "wave_two",
+    }
+    TICK = 0.05
+
+    def __init__(self, arm, dev=None):
+        from evdev import categorize, ecodes   # lazy: Linux only
+        self._categorize, self._ecodes = categorize, ecodes
+        self.arm = arm
+        self.dev = dev or self.find_keyboard()
+        self.held = set()
+        self.quit = False
+        log.info("Keyboard on %s (%s): arrows/ZX/AD/WE jog, R reset, P point, C curl, "
+                 "J jab, F fist bump, V/B wave, L limp, Esc quit", self.dev.path, self.dev.name)
+
+    @staticmethod
+    def find_keyboard():
+        try:
+            from evdev import InputDevice, ecodes, list_devices
+        except ImportError:
+            raise RuntimeError("Keyboard mode needs evdev (Linux only)")
         for path in list_devices():
             dev = InputDevice(path)
             keys = dev.capabilities().get(ecodes.EV_KEY, [])
             if ecodes.KEY_A in keys and ecodes.KEY_UP in keys:
                 return dev
-        raise RuntimeError("No keyboard found in /dev/input")
+        raise RuntimeError("No keyboard found in /dev/input (is your user in the 'input' group?)")
 
-    def listen_hold(self):
-        """Hold-aware loop: tracks which keys are currently held and acts
-        repeatedly while they stay down, independent of OS key-repeat rate.
-        Left/right rotate the waist, up/down raise/lower the shoulder."""
-        dev = self.find_keyboard()
-        print(f"Listening on {dev.path} ({dev.name})")
-        held = set()
-
-        while True:
-            # Wait up to 0.05s for input; returns immediately if a key event is ready.
-            r, _, _ = select.select([dev.fd], [], [], 0.05)
-            if r:
-                for event in dev.read():
-                    if event.type != ecodes.EV_KEY:
-                        continue
-                    key = categorize(event)
+    def step(self, timeout=0.0):
+        newly = set()
+        r, _, _ = select.select([self.dev.fd], [], [], timeout)
+        if r:
+            for event in self.dev.read():
+                if event.type != self._ecodes.EV_KEY:
+                    continue
+                key = self._categorize(event)
+                codes = key.keycode if isinstance(key.keycode, list) else [key.keycode]
+                for code in codes:
                     if key.keystate == key.key_down:
-                        held.add(key.keycode)
+                        if code not in self.held:
+                            newly.add(code)
+                        self.held.add(code)
                     elif key.keystate == key.key_up:
-                        held.discard(key.keycode)
+                        self.held.discard(code)
 
-            if "KEY_ESC" in held:
-                break
+        if "KEY_ESC" in self.held:
+            self.quit = True
+            return
+        if "KEY_L" in newly:
+            self.arm.go_limp()
+        for code in newly:
+            if code in self.PRESS_KEYS:
+                log.debug("%s -> %s", code, self.PRESS_KEYS[code])
+                self.arm.gesture(self.PRESS_KEYS[code], wait=False)
+        if self.arm.busy():                   # a gesture owns the arm right now
+            return
+        for code in self.held:
+            if code in self.HOLD_KEYS:
+                joint, deg = self.HOLD_KEYS[code]
+                self.arm.worker.nudge(joint, deg)
+                log.debug("%s -> %s %+d", code, joint, deg)
 
-            # This block runs ~20x/sec for as long as a key stays held.
-            moved = False
-            if "KEY_UP" in held:
-                print("UP PRESSED")
-                self.pos_log[1] -= 5
-                moved = True
-
-            if "KEY_DOWN" in held:
-                print("DOWN PRESSED")
-                self.pos_log[1] += 5
-                moved = True
-
-            
-            if "KEY_LEFT" in held:
-                print("LEFT PRESSED")
-                self.pos_log[0] -= 5
-                moved = True
-
-            if "KEY_RIGHT" in held:
-                print("RIGHT PRESSED")
-                self.pos_log[0] += 5
-                moved = True
-
-            
-            
-            if "KEY_W" in held:
-                print("LEFT PRESSED")
-                self.pos_log[2] -= 5
-                moved = True
-
-            if "KEY_E" in held:
-                print("RIGHT PRESSED")
-                self.pos_log[2] += 5
-                moved = True
-            
-            if "KEY_A" in held:
-                print("LEFT PRESSED")
-                self.pos_log[1] -= 5
-                moved = True
-
-            if "KEY_D" in held:
-                print("RIGHT PRESSED")
-                self.pos_log[1] += 5
-                moved = True
-            
-            if "KEY_Z" in held:
-                print("LEFT PRESSED")
-                self.pos_log[0] -= 5
-                moved = True
-
-            if "KEY_X" in held:
-                print("RIGHT PRESSED")
-                self.pos_log[0] += 5
-                moved = True
+    def run(self):
+        while not self.quit:
+            self.step(timeout=self.TICK)
 
 
-
-
-            if "KEY_R" in held:
-                print("RESET PRESSED")
-                self.reset()
-            if "KEY_P" in held:
-                print("POINT PRESSED")
-                self.point()
-            if "KEY_C" in held:
-                print("CURL PRESSED")
-                self.curl()
-            if moved:
-                # move_servo expects a list of [waist, shoulder, elbow] rows
-                asyncio.run(self.move_servo([list(self.pos_log)]))
-
-    ## Keyboard press controls
-    def listen_press(self):
-        dev = self.find_keyboard()
-
-        print(f"Listening on {dev.path} ({dev.name})")
-        for event in dev.read_loop():
-            if event.type != ecodes.EV_KEY:
-                continue
-            key = categorize(event)
-            if key.keystate != key.key_down:   # only on press, ignore release/hold
-                continue
-            if key.keycode == "KEY_UP":
-                print("UP PRESSED")
-                self.reach(-30)
-            elif key.keycode == "KEY_DOWN":
-                print("DOWN PRESSED")
-                self.reach(30)
-            elif key.keycode == "KEY_LEFT":
-                print("LEFT PRESSED")
-                self.rotate(30)
-            elif key.keycode == "KEY_RIGHT":
-                print("RIGHT PRESSED")
-                self.rotate(-30)
-            elif key.keycode == "KEY_R":
-                print("RESET PRESSED")
-                self.reset()
-            elif key.keycode == "KEY_C":
-                print("CURL PRESSED")
-                self.curl()
-            elif key.keycode == "KEY_ESC":
-                break
+def _cli(arm):
+    aliases = {"cu": "curl", "fb": "fist_bump", "b": "fist_bump", "r": "reset", "w": "wave",
+               "p": "point", "pt": "point", "j": "jab", "br": "bounce_right", "bl": "bounce_left"}
+    print("Gestures: " + ", ".join(sorted(gestures.GESTURES)) + " (q quits)")
+    while True:
+        x = input("Enter Orientation >>> ").strip().lower()
+        x = aliases.get(x, x)
+        if x in ("q", "quit", "exit"):
+            break
+        if x in gestures.GESTURES:
+            arm.gesture(x)
+        elif x == "waist":
+            arm.rotate_waist(10)
+            time.sleep(0.5)
+            arm.rotate_waist(-10)
+        else:
+            print("Unknown gesture")
 
 
 if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description="Hank arm control")
+    ap.add_argument("--mode", choices=["keys", "cli", "dance"], default="keys")
+    ap.add_argument("--bpm", type=float, help="tempo for --mode dance (prompts if omitted)")
+    ap.add_argument("-v", "--verbose", action="store_true")
+    args = ap.parse_args()
+    config.setup_logging(args.verbose)
+
     p = positions()
-    print("\n $$$   Hank Orientation System   $$$ \n")
-    settings = 2
-    if settings == 0:
-        print("Keyboard Controls: \n")
-        p.reset()
-        p.listen_hold()
-    elif settings == 1:
-        while True:
-            print("\n")
-            x = input("Enter Orientation >>> ")
-            print("\n")
-            if x == "curl" or x == "cu":
-                p.curl()
-            elif x == "fb" or x == "b":
-                p.fist_bump()
-            elif x == "reset" or x == "r":
-                p.reset()
-            elif x == "wave" or x == "w":
-                p.wave()
-            elif x == "point" or x == "p" or x == "pt":
-                p.point()
-            elif x == "jab" or x == "j":
-                p.jab()
-            elif x == "br":
-                p.bounce_right()
-            elif x == "bl":
-                p.bounce_left()
-            elif x == "waist":
-                p.rotate_waist(10)
-                time.sleep(0.5)
-                p.rotate_waist(-10)
-    elif settings == 2:
-        bpm = input("Enter BPM >>> ")
-        p.dance(int(bpm))
-        #p.bounce(20, "right")
+    log.info("$$$ Hank Orientation System (%s mode) $$$", args.mode)
+    try:
+        if args.mode == "keys":
+            p.reset()
+            p.listen_hold()
+        elif args.mode == "cli":
+            _cli(p)
+        else:
+            bpm = args.bpm or float(input("Enter BPM >>> "))
+            p.dance(bpm)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        p.stop()

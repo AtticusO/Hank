@@ -1,0 +1,17 @@
+## pigpio daemon for Hank's servos. pigpio was built from source here
+## (/usr/local/bin/pigpiod), so no unit came with it; pigpio-master/util's
+## sample points at /usr/bin and uses a relative PID file.
+## -l: listen on localhost only. Without it, anyone on the network can drive
+## the GPIO pins through port 8888.
+[Unit]
+Description=Pigpio daemon (localhost only)
+After=network.target
+
+[Service]
+Type=forking
+PIDFile=/run/pigpio.pid
+ExecStart=/usr/local/bin/pigpiod -l
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

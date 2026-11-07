@@ -6,3 +6,5 @@ __pycache__
 fable5_analysis.txt
 secrets.json
 .cache
+*.pyc
+desktop.ini

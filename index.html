@@ -90,6 +90,27 @@
     background: var(--accent); color: #221600;
     font-size: 1.1rem; cursor: pointer; flex-shrink: 0;
   }
+  #nowbar input[type=range] { width: 5.5rem; accent-color: var(--accent); flex-shrink: 0; }
+
+  .track .actions { display: flex; gap: 0.35rem; flex-shrink: 0; }
+  .track .actions button.queue { border-color: var(--muted); color: var(--muted); }
+
+  .panel { max-width: 34rem; margin: 0 auto 0.8rem; padding: 0 1rem; }
+  .panel .box { background: var(--panel); border-radius: 0.6rem; padding: 0.7rem 0.9rem; }
+  .panel h2 { font-size: 0.8rem; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 0.4rem; }
+  #queueList { list-style: none; }
+  #queueList li { padding: 0.25rem 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #queueList li span { color: var(--muted); font-size: 0.85rem; }
+  .row { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+  .pill {
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--accent); border-radius: 2rem;
+    background: transparent; color: var(--accent);
+    font-size: 0.9rem; font-weight: 600; cursor: pointer;
+  }
+  .pill.on { background: var(--accent); color: #221600; }
+  .pill:active { transform: scale(0.97); }
+  #danceInfo { color: var(--muted); font-size: 0.85rem; }
 </style>
 </head>
 <body>
@@ -104,6 +125,25 @@
   </form>
 
   <div id="message"></div>
+
+  <div class="panel" id="queuePanel" hidden>
+    <div class="box">
+      <h2>UP NEXT</h2>
+      <ol id="queueList"></ol>
+      <div class="row" style="margin-top:0.4rem">
+        <button class="pill" id="skipBtn">Skip &#9654;&#9654;</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" id="dancePanel" hidden>
+    <div class="box row">
+      <button class="pill" id="danceBtn">&#128378; Dance</button>
+      <button class="pill" id="tapBtn" title="Tap 4+ times on the beat">Tap tempo</button>
+      <span id="danceInfo"></span>
+    </div>
+  </div>
+
   <div id="results"></div>
 
   <div id="nowbar" hidden>
@@ -112,6 +152,7 @@
       <div class="name" id="nowName"></div>
       <div class="artist" id="nowArtist"></div>
     </div>
+    <input id="volume" type="range" min="0" max="100" step="5" title="Volume">
     <button id="playPause" title="Play/Pause">&#10074;&#10074;</button>
   </div>
 
@@ -119,18 +160,35 @@
   const messageEl = document.getElementById("message");
   const resultsEl = document.getElementById("results");
   const nowbar = document.getElementById("nowbar");
+  const volumeEl = document.getElementById("volume");
   let isPlaying = false;
+  let volumeDragging = false;
 
   function showMessage(text, isError) {
     messageEl.textContent = text || "";
     messageEl.classList.toggle("error", !!isError);
   }
 
+  // Hardened: a non-JSON error page (proxy, crash) gives a readable message
+  // instead of a cryptic JSON parse error.
   async function api(path, options) {
     const res = await fetch(path, options);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      throw new Error(`Server error (${res.status})`);
+    }
+    if (!res.ok || data.error) throw new Error(data.error || `Server error (${res.status})`);
     return data.result;
+  }
+
+  function post(path, body) {
+    return api(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
   }
 
   document.getElementById("searchForm").addEventListener("submit", async (e) => {
@@ -147,6 +205,23 @@
       showMessage(err.message, true);
     }
   });
+
+  function actionButton(label, cls, fn) {
+    const btn = document.createElement("button");
+    btn.textContent = label;
+    if (cls) btn.className = cls;
+    btn.addEventListener("click", async () => {
+      btn.textContent = "...";
+      try {
+        await fn();
+        showMessage("");
+      } catch (err) {
+        showMessage(err.message, true);
+      }
+      btn.textContent = label;
+    });
+    return btn;
+  }
 
   function trackRow(t) {
     const row = document.createElement("div");
@@ -175,24 +250,19 @@
     info.append(name, artist);
     row.appendChild(info);
 
-    const btn = document.createElement("button");
-    btn.textContent = "Play";
-    btn.addEventListener("click", async () => {
-      btn.textContent = "...";
-      try {
-        await api("/play", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ uri: t.uri }),
-        });
-        showMessage("");
-        refreshStatus();
-      } catch (err) {
-        showMessage(err.message, true);
-      }
-      btn.textContent = "Play";
-    });
-    row.appendChild(btn);
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    actions.appendChild(actionButton("Play", "", async () => {
+      await post("/play", t);
+      refreshStatus();
+    }));
+    actions.appendChild(actionButton("+ Queue", "queue", async () => {
+      await post("/queue", t);
+      showMessage(`Queued: ${t.name}`);
+      refreshQueue();
+      refreshStatus();
+    }));
+    row.appendChild(actions);
     return row;
   }
 
@@ -205,6 +275,96 @@
     }
   });
 
+  // ---- volume
+  volumeEl.addEventListener("input", () => { volumeDragging = true; });
+  volumeEl.addEventListener("change", async () => {
+    volumeDragging = false;
+    try {
+      await post("/volume", { percent: Number(volumeEl.value) });
+    } catch (err) {
+      showMessage(err.message, true);
+    }
+  });
+
+  // ---- queue
+  document.getElementById("skipBtn").addEventListener("click", async () => {
+    try {
+      await api("/skip", { method: "POST" });
+      refreshQueue();
+      refreshStatus();
+    } catch (err) {
+      showMessage(err.message, true);
+    }
+  });
+
+  async function refreshQueue() {
+    try {
+      const q = await api("/queue");
+      const list = document.getElementById("queueList");
+      list.innerHTML = "";
+      for (const t of q) {
+        const li = document.createElement("li");
+        li.textContent = t.name + " ";
+        const by = document.createElement("span");
+        by.textContent = t.artist;
+        li.appendChild(by);
+        list.appendChild(li);
+      }
+      document.getElementById("queuePanel").hidden = q.length === 0;
+    } catch (err) {
+      // quiet on polls
+    }
+  }
+
+  // ---- dance + tap tempo
+  const danceBtn = document.getElementById("danceBtn");
+  const danceInfo = document.getElementById("danceInfo");
+  let danceOn = false;
+  let taps = [];
+
+  function showDance(d) {
+    danceOn = d.on;
+    danceBtn.classList.toggle("on", d.on);
+    if (!d.on) danceInfo.textContent = "";
+    else if (d.bpm) danceInfo.textContent = `${Math.round(d.bpm)} BPM${d.dancing ? "" : " (waiting for music)"}`;
+    else danceInfo.textContent = "finding the beat… tap it if this sticks";
+  }
+
+  danceBtn.addEventListener("click", async () => {
+    try {
+      showDance(await post("/dance", { on: !danceOn }));
+    } catch (err) {
+      showMessage(err.message, true);
+    }
+  });
+
+  document.getElementById("tapBtn").addEventListener("click", async () => {
+    const now = performance.now();
+    taps = taps.filter((t) => now - t < 3000);     // forget taps older than 3 s
+    taps.push(now);
+    if (taps.length < 4) {
+      danceInfo.textContent = `tap ${4 - taps.length} more…`;
+      return;
+    }
+    const gaps = taps.slice(1).map((t, i) => t - taps[i]);
+    const bpm = 60000 / (gaps.reduce((a, b) => a + b, 0) / gaps.length);
+    try {
+      showDance(await post("/dance", { on: true, bpm: Math.round(bpm * 10) / 10 }));
+    } catch (err) {
+      showMessage(err.message, true);
+    }
+  });
+
+  async function refreshDance() {
+    try {
+      const d = await api("/dance");
+      document.getElementById("dancePanel").hidden = !d.available;
+      if (d.available) showDance(d);
+    } catch (err) {
+      // quiet on polls
+    }
+  }
+
   async function refreshStatus() {
     try {
       const now = await api("/status");
@@ -215,13 +375,20 @@
       document.getElementById("nowArt").src = now.album_art || "";
       isPlaying = now.is_playing;
       document.getElementById("playPause").innerHTML = isPlaying ? "&#10074;&#10074;" : "&#9654;";
+      if (now.volume != null && !volumeDragging) volumeEl.value = now.volume;
     } catch (err) {
       // stay quiet on status polls; the bar just won't update
     }
   }
 
-  refreshStatus();
-  setInterval(refreshStatus, 5000);
+  function refreshAll() {
+    refreshStatus();
+    refreshQueue();
+    refreshDance();
+  }
+
+  refreshAll();
+  setInterval(refreshAll, 5000);
 </script>
 </body>
 </html>
